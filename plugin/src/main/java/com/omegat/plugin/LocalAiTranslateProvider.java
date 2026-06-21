@@ -179,11 +179,12 @@ public class LocalAiTranslateProvider extends BaseTranslate {
 
         String currentFilePath = currentEntry != null ? currentEntry.getKey().file : null;
         String styleRules = loadProjectStyleRules();
+        String projectId = currentProjectId();
 
         String requestBody = buildTranslateJson(
             text, sLang.getLanguage(), tLang.getLanguage(),
             currentFilePath, glossaryEntries, matchesToSend, contextBefore, contextAfter,
-            styleRules
+            styleRules, projectId
         );
 
         String response = httpPost(SERVICE_URL, requestBody, 30_000);
@@ -201,6 +202,24 @@ public class LocalAiTranslateProvider extends BaseTranslate {
             Path rulesFile = Paths.get(projectRoot, "ai_style_rules.txt");
             if (!Files.isRegularFile(rulesFile)) return null;
             return Files.readString(rulesFile, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Opaque per-project key sent to the service so it can partition state (glossary/summary
+     * caches) across OmegaT projects — never a filesystem path, just a stable hash of one.
+     * Null outside the OmegaT runtime (no project loaded).
+     */
+    static String currentProjectId() {
+        try {
+            String projectRoot = Core.getProject().getProjectProperties().getProjectRoot();
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(projectRoot.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : hash) hex.append(String.format("%02x", b));
+            return hex.substring(0, 16);
         } catch (Exception e) {
             return null;
         }
@@ -249,7 +268,7 @@ public class LocalAiTranslateProvider extends BaseTranslate {
             String text, String srcLang, String tgtLang, String filePath,
             List<GlossaryEntry> glossary, List<NearString> matches,
             List<String[]> contextBefore, List<String[]> contextAfter,
-            String styleRules) {
+            String styleRules, String projectId) {
 
         StringBuilder sb = new StringBuilder("{");
         sb.append("\"source_text\":").append(quoted(text)).append(",");
@@ -257,6 +276,7 @@ public class LocalAiTranslateProvider extends BaseTranslate {
         sb.append("\"target_lang\":").append(quoted(tgtLang)).append(",");
         if (filePath != null) sb.append("\"file_path\":").append(quoted(filePath)).append(",");
         if (styleRules != null) sb.append("\"style_rules\":").append(quoted(styleRules)).append(",");
+        if (projectId != null) sb.append("\"project_id\":").append(quoted(projectId)).append(",");
 
         sb.append("\"context_before\":[");
         for (int i = 0; i < contextBefore.size(); i++) {
@@ -490,6 +510,10 @@ public class LocalAiTranslateProvider extends BaseTranslate {
             sb.append("\"file_path\":").append(quoted(filePath)).append(",");
             sb.append("\"source_lang\":").append(quoted(srcLang)).append(",");
             sb.append("\"target_lang\":").append(quoted(tgtLang)).append(",");
+            String projectId = currentProjectId();
+            if (projectId != null) {
+                sb.append("\"project_id\":").append(quoted(projectId)).append(",");
+            }
             sb.append("\"source_strings\":[");
             for (int i = 0; i < sourceStrings.size(); i++) {
                 if (i > 0) sb.append(",");
@@ -599,6 +623,10 @@ public class LocalAiTranslateProvider extends BaseTranslate {
             sb.append("\"target_lang\":").append(quoted(tgtLang)).append(",");
             if (filePath != null) {
                 sb.append("\"file_path\":").append(quoted(filePath)).append(",");
+            }
+            String projectId = currentProjectId();
+            if (projectId != null) {
+                sb.append("\"project_id\":").append(quoted(projectId)).append(",");
             }
             if (existingTerms != null && !existingTerms.isEmpty()) {
                 sb.append("\"existing_terms\":[");

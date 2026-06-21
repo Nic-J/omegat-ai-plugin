@@ -188,6 +188,16 @@ class TestGlossaryState:
         state.mark_deferred(h, db_path=db)  # should not overwrite
         assert state.is_extracted(h, db_path=db)
 
+    def test_same_content_hash_isolated_across_projects(self, tmp_path):
+        from glossary import state
+
+        db = tmp_path / "test_state.db"
+        h = state.compute_hash(["shared content"])
+        state.mark_extracted(h, project_id="proj-a", db_path=db)
+        assert state.is_extracted(h, project_id="proj-a", db_path=db)
+        assert not state.is_extracted(h, project_id="proj-b", db_path=db)
+        assert not state.is_extracted(h, db_path=db)  # default "" bucket untouched
+
 
 @pytest.fixture
 def test_settings(tmp_path):
@@ -249,3 +259,14 @@ class TestExtractionFlow:
         row = conn.execute("SELECT file_path FROM glossary_state").fetchone()
         conn.close()
         assert row[0] == "docs/chapter1.html"
+
+    def test_status_isolated_per_project_id(self, test_settings):
+        client = TestClient(app)
+        payload_a = {**self.BASE_PAYLOAD, "project_id": "proj-a"}
+        payload_b = {**self.BASE_PAYLOAD, "project_id": "proj-b"}
+
+        with patch("glossary.agent.extract_glossary", new=AsyncMock(return_value=[])):
+            client.post("/prepare-glossary", json=payload_a)
+
+        assert client.post("/glossary/status", json=payload_a).json()["needs_extraction"] is False
+        assert client.post("/glossary/status", json=payload_b).json()["needs_extraction"] is True

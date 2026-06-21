@@ -41,6 +41,14 @@ class TestFileSummaryState:
         assert summary_state.get_summary("a.docx", db_path=db) == "Summary A."
         assert summary_state.get_summary("b.docx", db_path=db) == "Summary B."
 
+    def test_same_file_path_isolated_across_projects(self, tmp_path):
+        db = tmp_path / "state.db"
+        summary_state.save_summary("f.docx", "Project A's summary.", "EN", "FR-CA", "m", project_id="proj-a", db_path=db)
+        summary_state.save_summary("f.docx", "Project B's summary.", "EN", "FR-CA", "m", project_id="proj-b", db_path=db)
+        assert summary_state.get_summary("f.docx", project_id="proj-a", db_path=db) == "Project A's summary."
+        assert summary_state.get_summary("f.docx", project_id="proj-b", db_path=db) == "Project B's summary."
+        assert summary_state.get_summary("f.docx", db_path=db) is None  # default "" bucket untouched
+
 
 class TestFileSummaryEndpoint:
     def test_generates_and_caches(self, test_settings):

@@ -103,7 +103,6 @@ content is sent in the request payload, not as filesystem paths.
 ## Limitations
 
 - Built-in terminology sources (Termium, OQLF) are Canadian EN↔FR-focused — add your own via `terminology_sources.toml` for other languages
-- State (glossary extraction status, file summaries) is currently global, not scoped per OmegaT project — planned
 
 ## Contributing
 

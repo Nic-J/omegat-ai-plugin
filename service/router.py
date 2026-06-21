@@ -30,7 +30,9 @@ async def translate(
 ) -> TranslateResponse:
     file_summary: str | None = None
     if request.file_path:
-        file_summary = summary_state.get_summary(request.file_path, db_path=settings.state_db_path)
+        file_summary = summary_state.get_summary(
+            request.file_path, project_id=request.project_id or "", db_path=settings.state_db_path
+        )
 
     translated_text = await translator.translate(request, file_summary=file_summary)
 
@@ -51,7 +53,9 @@ async def generate_file_summary(
     request: FileSummaryRequest,
     settings: Settings = Depends(get_settings),
 ) -> FileSummaryResponse:
-    existing = summary_state.get_summary(request.file_path, db_path=settings.state_db_path)
+    existing = summary_state.get_summary(
+        request.file_path, project_id=request.project_id or "", db_path=settings.state_db_path
+    )
     if existing:
         log.info("file_summary_cache_hit", file_path=request.file_path)
         return FileSummaryResponse(summary=existing, from_cache=True)
@@ -63,6 +67,7 @@ async def generate_file_summary(
         request.file_path, summary,
         request.source_lang, request.target_lang,
         settings.ai_model,
+        project_id=request.project_id or "",
         db_path=settings.state_db_path,
     )
     log.info("file_summary_generated", file_path=request.file_path)
@@ -92,6 +97,7 @@ async def prepare_glossary(
     content_hash = glossary_state.compute_hash(request.source_strings)
     glossary_state.mark_extracted(
         content_hash,
+        project_id=request.project_id or "",
         file_path=request.file_path,
         db_path=settings.state_db_path,
     )
@@ -108,6 +114,7 @@ async def glossary_defer(
     content_hash = glossary_state.compute_hash(request.source_strings)
     glossary_state.mark_deferred(
         content_hash,
+        project_id=request.project_id or "",
         file_path=request.file_path,
         db_path=settings.state_db_path,
     )
@@ -122,7 +129,7 @@ async def glossary_status(
 ) -> GlossaryStatusResponse:
     content_hash = glossary_state.compute_hash(request.source_strings)
     needs_extraction = not glossary_state.is_extracted(
-        content_hash, db_path=settings.state_db_path
+        content_hash, project_id=request.project_id or "", db_path=settings.state_db_path
     )
     log.info("glossary_status", content_hash=content_hash, needs_extraction=needs_extraction)
     return GlossaryStatusResponse(needs_extraction=needs_extraction, content_hash=content_hash)

@@ -28,6 +28,15 @@ class LocalAiTranslateProviderTest {
         assertNull(LocalAiTranslateProvider.loadProjectStyleRules());
     }
 
+    // ── currentProjectId ──────────────────────────────────────────────────────
+    // Core.getProject() requires OmegaT's full runtime, which isn't bootstrapped in plain
+    // unit tests, so this always exercises the fallback branch and returns null.
+
+    @Test
+    void currentProjectId_returnsNullOutsideOmegatRuntime() {
+        assertNull(LocalAiTranslateProvider.currentProjectId());
+    }
+
     // ── extractStringField ────────────────────────────────────────────────────
 
     @Test

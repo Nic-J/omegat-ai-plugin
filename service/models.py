@@ -28,6 +28,7 @@ class TranslateRequest(BaseModel):
     target_lang: str
     file_path: str | None = None             # looked up server-side to inject file summary
     style_rules: str | None = None           # project-local rules content; takes priority over the global setting
+    project_id: str | None = None            # opaque key (plugin-derived); partitions state across OmegaT projects
     glossary: list[GlossaryEntry] = []
     fuzzy_matches: list[FuzzyMatch] = []
     context_before: list[ContextSegment] = []
@@ -48,6 +49,7 @@ class GlossaryPrepRequest(BaseModel):
     target_lang: str
     existing_terms: list[str] = []  # source terms already in the project glossary; used to skip duplicates
     file_path: str | None = None    # OmegaT project-relative path, stored for human readability
+    project_id: str | None = None   # opaque key (plugin-derived); partitions state across OmegaT projects
 
 
 class GlossarySuggestion(BaseModel):
@@ -75,6 +77,7 @@ class FileSummaryRequest(BaseModel):
     source_strings: list[str]
     source_lang: str
     target_lang: str
+    project_id: str | None = None   # opaque key (plugin-derived); partitions state across OmegaT projects
 
 
 class FileSummaryResponse(BaseModel):
