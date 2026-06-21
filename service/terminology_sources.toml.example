@@ -1,0 +1,35 @@
+# Terminology lookup sources for the glossary agent.
+# Copy to terminology_sources.toml (next to .env) to customize — the service
+# falls back to the built-in Termium + OQLF defaults if this file is absent.
+#
+# Fields:
+#   name          - used to build the tool name (fetch_<name>)
+#   enabled       - set false to disable without deleting the entry
+#   description   - shown to the LLM so it knows what the source covers
+#   url_template  - "{term}" is always substituted; "{lang}" only if lang_map matches
+#   lang_map      - optional source_lang prefix -> {lang} substitution (e.g. "FR-CA" matches "FR")
+
+[[sources]]
+name = "termium"
+enabled = true
+description = "Canadian government bilingual terminology"
+url_template = "https://www.btb.termiumplus.gc.ca/tpv2alpha/alpha-eng.html?lang={lang}&srchtxt={term}&index=enb"
+lang_map = { EN = "eng", FR = "fra" }
+
+[[sources]]
+name = "oqlf"
+enabled = true
+description = "Quebec French terminology"
+url_template = "https://vitrinelinguistique.oqlf.gouv.qc.ca/resultats-de-recherche?tx_solr[q]={term}&tx_solr[filter][]=type_stringM:gdt"
+
+[[sources]]
+name = "iate"
+enabled = false
+description = "EU multilingual terminology"
+url_template = "https://iate.europa.eu/search#/result/1/1/{term}/1/1/0/none"
+
+[[sources]]
+name = "microsoft_terminology"
+enabled = false
+description = "Microsoft software localization terminology"
+url_template = "https://www.microsoft.com/en-us/language/Search?text={term}"

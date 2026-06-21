@@ -3,8 +3,8 @@ Glossary extraction agent.
 
 Two-phase approach:
 1. LLM identifies candidate terms worth researching from the source strings.
-2. For each candidate, the agent fetches Termium and OQLF pages and extracts
-   authoritative source→target pairs from the stripped page text.
+2. For each candidate, the agent fetches each configured terminology source's
+   page and extracts authoritative source->target pairs from the stripped text.
 """
 import re
 
@@ -15,12 +15,10 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 
 from config import get_settings
+from glossary.sources import TerminologySource, build_url, load_terminology_sources
 from models import GlossarySuggestion
 
 log = structlog.get_logger()
-
-TERMIUM_URL = "https://www.btb.termiumplus.gc.ca/tpv2alpha/alpha-eng.html"
-OQLF_URL = "https://vitrinelinguistique.oqlf.gouv.qc.ca/resultats-de-recherche"
 
 
 class _CandidateTerms(BaseModel):
@@ -51,35 +49,41 @@ _term_extractor: Agent = _make_agent(_CandidateTerms)
 _glossary_agent: Agent = _make_agent(list[GlossarySuggestion])
 
 
-@_glossary_agent.tool
-async def fetch_termium(ctx: RunContext[GlossaryDeps], term: str) -> str:
-    """Fetch the Termium Plus page for a term and return stripped text."""
-    lang = "fra" if ctx.deps.source_lang.upper().startswith("FR") else "eng"
-    url = f"{TERMIUM_URL}?lang={lang}&srchtxt={term}&index=enb"
-    log.info("fetch_termium", term=term, url=url)
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, follow_redirects=True)
-        log.info("fetch_termium_done", term=term, status=resp.status_code, chars=len(resp.text))
-        return _strip_html(resp.text) if resp.status_code == 200 else f"HTTP {resp.status_code}"
-    except Exception as e:
-        log.warning("fetch_termium_error", term=term, error=str(e))
-        return f"Error: {e}"
+def _make_fetch_tool(source: TerminologySource, tool_name: str):
+    """Build a fetch tool closed over one terminology source. A factory (rather than
+    a loop body) so each tool's `source`/`tool_name` are bound per-call, not shared."""
+
+    async def fetch(ctx: RunContext[GlossaryDeps], term: str) -> str:
+        url = build_url(source, term, ctx.deps.source_lang)
+        log.info(tool_name, term=term, url=url)
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(url, follow_redirects=True)
+            log.info(f"{tool_name}_done", term=term, status=resp.status_code, chars=len(resp.text))
+            return _strip_html(resp.text) if resp.status_code == 200 else f"HTTP {resp.status_code}"
+        except Exception as e:
+            log.warning(f"{tool_name}_error", term=term, error=str(e))
+            return f"Error: {e}"
+
+    return fetch
 
 
-@_glossary_agent.tool
-async def fetch_oqlf(ctx: RunContext[GlossaryDeps], term: str) -> str:
-    """Fetch the OQLF Grand dictionnaire terminologique page for a term and return stripped text."""
-    url = f"{OQLF_URL}?tx_solr[q]={term}&tx_solr[filter][]=type_stringM:gdt"
-    log.info("fetch_oqlf", term=term, url=url, target_lang=ctx.deps.target_lang)
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, follow_redirects=True)
-        log.info("fetch_oqlf_done", term=term, status=resp.status_code, chars=len(resp.text))
-        return _strip_html(resp.text) if resp.status_code == 200 else f"HTTP {resp.status_code}"
-    except Exception as e:
-        log.warning("fetch_oqlf_error", term=term, error=str(e))
-        return f"Error: {e}"
+def _register_terminology_tools(agent: Agent) -> list[str]:
+    """Register one fetch tool per enabled terminology source. Returns the tool
+    names so Phase 2's prompt can tell the LLM which tools exist."""
+    tool_names = []
+    for source in load_terminology_sources():
+        tool_name = f"fetch_{source.name}"
+        fetch = _make_fetch_tool(source, tool_name)
+        agent.tool(
+            name=tool_name,
+            description=f"Fetch the {source.description or source.name} page for a term and return stripped text.",
+        )(fetch)
+        tool_names.append(tool_name)
+    return tool_names
+
+
+_TOOL_NAMES: list[str] = _register_terminology_tools(_glossary_agent)
 
 
 async def extract_glossary(
@@ -89,7 +93,8 @@ async def extract_glossary(
 ) -> list[GlossarySuggestion]:
     """
     Given source strings from an OmegaT file, identify candidate terms and
-    look them up in Termium and OQLF to produce authoritative glossary suggestions.
+    look them up via the configured terminology sources to produce authoritative
+    glossary suggestions.
     """
     from glossary.state import compute_hash, mark_extracted
 
@@ -124,10 +129,10 @@ async def extract_glossary(
     if not terms:
         return []
 
-    # Phase 2 — look up each term in Termium and OQLF
+    # Phase 2 — look up each term via the configured terminology sources
     lookup_prompt = (
         f"You are researching authoritative {source_lang}→{target_lang} terminology.\n"
-        f"For each of these terms, call fetch_termium and fetch_oqlf to look them up, "
+        f"For each of these terms, call {', '.join(_TOOL_NAMES)} to look them up, "
         f"then return a list of glossary suggestions with the source term, its authoritative "
         f"{target_lang} translation, an optional brief usage comment, and the source_url "
         f"(the database URL you found it in).\n"

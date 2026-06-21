@@ -4,6 +4,9 @@
 # Personal style rules — ship style_rules.example.txt instead
 service/style_rules.txt
 
+# Personal terminology sources — ship terminology_sources.toml.example instead
+service/terminology_sources.toml
+
 # Runtime state (SQLite DB for glossary + summaries)
 *.db
 

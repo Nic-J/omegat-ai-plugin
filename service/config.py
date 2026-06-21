@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     #           "google-gla:gemini-2.0-flash"
     ai_model: str = "ollama:mistral-nemo"
 
-    # Model used for glossary web research (Termium / OQLF lookups).
+    # Model used for glossary web research (terminology source lookups).
     # Falls back to ai_model if empty. Web research benefits from a stronger
     # model — set this to a cloud model while keeping ai_model on local Ollama.
     glossary_model: str = ""
@@ -40,8 +40,14 @@ class Settings(BaseSettings):
     # correctly regardless of the directory it's launched from.
     state_db_path: Path | None = _DEFAULT_STATE_DB_PATH
 
+    # TOML file listing terminology lookup sources for the glossary agent (see
+    # terminology_sources.toml.example). Resolved relative to the CWD the service
+    # is started from (start.sh keeps that at service/, next to .env). Falls back
+    # to the built-in Termium + OQLF defaults if the file isn't found.
+    terminology_sources_path: Path | None = Path("terminology_sources.toml")
+
     # ── Glossary agent tuning ─────────────────────────────────────────────────
-    # Maximum number of candidate terms sent to Termium / OQLF for lookup.
+    # Maximum number of candidate terms sent to terminology sources for lookup.
     # Increase for broader coverage; decrease to reduce API calls and latency.
     glossary_max_terms: int = 20
 

@@ -64,14 +64,23 @@ All service settings live in `service/.env` (see `service/.env.example` for the 
 | `STATE_DB_PATH` | platform user data dir | SQLite DB for glossary/summary state |
 | `GLOSSARY_MAX_TERMS` | `20` | Max candidate terms sent for terminology lookup |
 | `GLOSSARY_MAX_PAGE_CHARS` | `3000` | Max characters of fetched page text passed to the LLM per lookup |
+| `TERMINOLOGY_SOURCES_PATH` | `terminology_sources.toml` | TOML file listing terminology lookup sources — copy `service/terminology_sources.toml.example` to customize |
 
 The OmegaT plugin's service URL is configurable via the OmegaT preferences key
 `ai_translation_service_url` (default `http://localhost:8000`) — set it in
 `omegat.prefs` if you run the service on a different host or port.
 
-Glossary lookup currently queries Termium and OQLF, which are Canadian
-EN↔FR-focused terminology databases. Support for other language pairs and
-sources is planned (see Limitations below).
+Glossary lookup ships with Termium and OQLF (Canadian EN↔FR terminology
+databases) as built-in defaults. To add your own sources (IATE, Microsoft
+Terminology, a corporate glossary API, etc.) or disable the defaults, copy
+`service/terminology_sources.toml.example` to `service/terminology_sources.toml`
+and edit it — no code changes needed. Each entry becomes a tool the glossary
+agent can call.
+
+You can also override the global style rules per OmegaT project: drop an
+`ai_style_rules.txt` file (same format as `style_rules.example.txt`) in the
+project's root folder and it takes priority over `STYLE_RULES_PATH` for
+translations done in that project.
 
 ## Usage
 
@@ -93,7 +102,7 @@ content is sent in the request payload, not as filesystem paths.
 
 ## Limitations
 
-- Glossary lookup currently uses Canadian EN↔FR terminology sources (Termium, OQLF) — extensibility to other languages/sources is planned
+- Built-in terminology sources (Termium, OQLF) are Canadian EN↔FR-focused — add your own via `terminology_sources.toml` for other languages
 - State (glossary extraction status, file summaries) is currently global, not scoped per OmegaT project — planned
 
 ## Contributing
