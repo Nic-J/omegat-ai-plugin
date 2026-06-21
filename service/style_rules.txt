@@ -1,0 +1,8 @@
+# Style rules for AI translation — one rule per line.
+# Copy this file, fill in your rules, and set STYLE_RULES_PATH in .env.
+# Lines starting with # are ignored.
+
+# Example rules:
+Use inclusive gender forms where applicable (e.g. "les membres" not gender-specific forms).
+Use the median point and slashes to create gender-inclusive structures, e.g. " le/la directeur·trice·s" ou "les donateur·trice·s majeur·e·s"
+In case of disagreement between translation memory entries and glossary entries, ensure compliance with the glossary.

@@ -1,0 +1,85 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.omegat.plugin</groupId>
+  <artifactId>ai-translate-plugin</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>11</maven.compiler.source>
+    <maven.compiler.target>11</maven.compiler.target>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.omegat</groupId>
+      <artifactId>omegat</artifactId>
+      <version>6.0.0</version>
+      <scope>provided</scope>
+      <exclusions>
+        <!-- OmegaT 6.0.0 POM incorrectly declares junixsocket-core as a JAR;
+             it changed to POM-only packaging in 2.4.0. Exclude and add the
+             real JARs below. -->
+        <exclusion>
+          <groupId>com.kohlschutter.junixsocket</groupId>
+          <artifactId>junixsocket-core</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.kohlschutter.junixsocket</groupId>
+      <artifactId>junixsocket-common</artifactId>
+      <version>2.4.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.kohlschutter.junixsocket</groupId>
+      <artifactId>junixsocket-native-common</artifactId>
+      <version>2.4.0</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <configuration>
+          <release>11</release>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+            </manifest>
+            <manifestEntries>
+              <!-- OmegaT 6.x discovers plugins via this MANIFEST.MF key -->
+              <OmegaT-Plugins>com.omegat.plugin.LocalAiTranslateProvider</OmegaT-Plugins>
+              <Plugin-Name>AI Translation Assistant</Plugin-Name>
+              <Plugin-Version>0.1.0</Plugin-Version>
+              <Plugin-Author>Nicolas Jadot</Plugin-Author>
+              <Plugin-Description>Translates text using a local AI service with TM and glossary context</Plugin-Description>
+              <Plugin-Category>machinetranslator</Plugin-Category>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

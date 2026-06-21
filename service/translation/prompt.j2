@@ -1,0 +1,48 @@
+Translate the following text from {{ source_lang }} to {{ target_lang }}.
+
+{% if file_summary %}
+Document context:
+{{ file_summary }}
+
+{% endif %}
+{% if style_rules %}
+Style rules:
+{% for rule in style_rules %}
+- {{ rule }}
+{% endfor %}
+
+{% endif %}
+{% if glossary %}
+Approved term translations:
+{% for entry in glossary %}
+- "{{ entry.source }}" → "{{ entry.target }}"{% if entry.comment %} ({{ entry.comment }}){% endif %}
+{% endfor %}
+
+{% endif %}
+{% if fuzzy_matches %}
+Reference translations from translation memory:
+{% for match in fuzzy_matches %}
+{{ match.adjusted_score if match.adjusted_score is not none else match.score }}% match — "{{ match.source }}" → "{{ match.target }}"
+{% endfor %}
+
+{% endif %}
+{% if context_before or context_after %}
+Surrounding segments for context (do not translate these):
+{% for seg in context_before %}
+  [before] "{{ seg.source }}"{% if seg.translation %} → "{{ seg.translation }}"{% endif %}
+
+{% endfor %}
+  [translate this] "{{ source_text }}"
+{% for seg in context_after %}
+
+  [after] "{{ seg.source }}"{% if seg.translation %} → "{{ seg.translation }}"{% endif %}
+{% endfor %}
+
+Text to translate:
+{{ source_text }}
+{% else %}
+Text to translate:
+{{ source_text }}
+{% endif %}
+
+Return only the translated text with no explanation.

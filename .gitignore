@@ -1,0 +1,24 @@
+# Environment
+.env
+
+# Runtime state (SQLite DB for glossary + summaries)
+*.db
+
+# AI assistant config (contains local paths; not for public repo)
+.claude/
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
+# Java/Groovy build artifacts
+target/
+*.class
+
+# Pytest
+.pytest_cache/
+
+# macOS
+.DS_Store

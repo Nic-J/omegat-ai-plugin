@@ -1,0 +1,12 @@
+You are analysing a document that will be translated from {{ source_lang }} to {{ target_lang }}.
+Based on the source segments below, write 2–3 sentences describing:
+- Document type (e.g. newsletter, legal brief, technical manual, UI strings)
+- Subject matter
+- Tone and register (formal, conversational, technical, etc.)
+
+Source segments:
+{% for segment in segments %}
+- {{ segment }}
+{% endfor %}
+
+Return only the description, no preamble or labels.

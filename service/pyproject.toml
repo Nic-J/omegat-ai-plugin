@@ -1,0 +1,59 @@
+[project]
+name = "omegat-ai-service"
+version = "0.1.0"
+description = "Local AI translation service for OmegaT plugin integration."
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi==0.136.3",
+    "uvicorn[standard]==0.49.0",
+    "pydantic==2.13.4",
+    "httpx2>=2.3.0",
+    "structlog>=24.1.0",
+    "pydantic-settings>=2.14.1",
+    "jinja2>=3.1.6",
+    "pydantic-ai>=0.4.0",
+    # glossary CLI
+    "typer>=0.23.2",
+    "scikit-learn>=1.6.1",
+    "sentence-transformers>=5.1.2",
+    "spacy>=3.8.11",
+    "en-core-web-md",
+    "fr-core-news-md",
+    "de-core-news-md",
+    "es-core-news-md",
+    "it-core-news-md",
+    "pt-core-news-md",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+glossary-extractor = "glossary.cli:app"
+
+[tool.setuptools]
+py-modules = ["main", "models", "config", "router"]
+packages = ["translation", "glossary"]
+
+[tool.uv.sources]
+en-core-web-md = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0.tar.gz" }
+fr-core-news-md = { url = "https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.8.0/fr_core_news_md-3.8.0.tar.gz" }
+de-core-news-md = { url = "https://github.com/explosion/spacy-models/releases/download/de_core_news_md-3.8.0/de_core_news_md-3.8.0.tar.gz" }
+es-core-news-md = { url = "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.8.0/es_core_news_md-3.8.0.tar.gz" }
+it-core-news-md = { url = "https://github.com/explosion/spacy-models/releases/download/it_core_news_md-3.8.0/it_core_news_md-3.8.0.tar.gz" }
+pt-core-news-md = { url = "https://github.com/explosion/spacy-models/releases/download/pt_core_news_md-3.8.0/pt_core_news_md-3.8.0.tar.gz" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
