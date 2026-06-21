@@ -3,15 +3,10 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from logging_config import configure_logging
 from router import router
 
-structlog.configure(
-    processors=[
-        structlog.stdlib.add_log_level,
-        structlog.dev.ConsoleRenderer(),
-    ]
-)
-
+configure_logging()
 log = structlog.get_logger()
 
 app = FastAPI(title="OmegaT AI Translation Service")

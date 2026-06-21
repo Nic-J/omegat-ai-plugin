@@ -4,8 +4,11 @@ from functools import lru_cache
 
 import numpy as np
 import spacy
+import structlog
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+
+log = structlog.get_logger()
 
 _LABSE_MODEL = "sentence-transformers/LaBSE"
 
@@ -109,6 +112,8 @@ def extract_biterms(
     # Filter before the expensive vectorization step
     src_terms = [t for t, c in src_counts.items() if _keep(c, total_src)]
     tgt_terms = [t for t, c in tgt_counts.items() if _keep(c, total_tgt)]
+
+    log.debug("biterm_candidates_filtered", src_terms=len(src_terms), tgt_terms=len(tgt_terms))
 
     if not src_terms or not tgt_terms:
         return []

@@ -1,6 +1,10 @@
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+import structlog
+
+log = structlog.get_logger()
+
 
 def parse_tmx(path: Path, src_lang: str, tgt_lang: str) -> list[tuple[str, str]]:
     """Parse a TMX file and return (source, target) segment pairs.
@@ -15,7 +19,9 @@ def parse_tmx(path: Path, src_lang: str, tgt_lang: str) -> list[tuple[str, str]]
     tgt_prefix = tgt_lang.lower()
 
     pairs: list[tuple[str, str]] = []
+    tu_count = 0
     for tu in root.iter("tu"):
+        tu_count += 1
         src_seg = tgt_seg = None
         for tuv in tu.findall("tuv"):
             # TMX uses xml:lang (XML namespace) or plain lang attribute
@@ -34,5 +40,8 @@ def parse_tmx(path: Path, src_lang: str, tgt_lang: str) -> list[tuple[str, str]]
                 tgt_seg = text
         if src_seg and tgt_seg:
             pairs.append((src_seg, tgt_seg))
+
+    if tu_count and len(pairs) < tu_count:
+        log.debug("tmx_unmatched_tu", path=str(path), tu_count=tu_count, paired=len(pairs))
 
     return pairs

@@ -4,11 +4,16 @@ pydantic-settings reads .env into its own config object but does not inject
 values into os.environ, so PydanticAI's default env-var lookup fails for keys
 like ANTHROPIC_API_KEY. Pass the key explicitly here instead.
 """
+import structlog
+
 from config import get_settings
+
+log = structlog.get_logger()
 
 
 def resolve_model(model_str: str):
     """Return a PydanticAI model instance for the given model string."""
+    log.debug("resolve_model", model=model_str)
     settings = get_settings()
     if model_str.startswith("ollama:"):
         from pydantic_ai.models.ollama import OllamaModel

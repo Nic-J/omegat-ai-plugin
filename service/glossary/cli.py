@@ -4,6 +4,8 @@ from pathlib import Path
 import structlog
 import typer
 
+from logging_config import configure_logging
+
 from .extractor import extract_from_dir, extract_from_file
 from .rater import rate_csv
 from .writer import write_csv, write_glossary
@@ -18,18 +20,6 @@ class OutputFormat(str, Enum):
     csv = "csv"
 
 
-def _configure_logging() -> None:
-    structlog.configure(
-        processors=[
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.dev.ConsoleRenderer(),
-        ],
-        wrapper_class=structlog.BoundLogger,
-        context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
-    )
-
-
 @app.command()
 def extract(
     input: Path = typer.Argument(..., help="Path to a .tmx file or a directory of .tmx files"),
@@ -42,7 +32,7 @@ def extract(
     max_doc_freq: float | None = typer.Option(None, "--max-doc-freq", help="Drop terms in more than this fraction of segments, e.g. 0.3"),
     format: OutputFormat = typer.Option(OutputFormat.txt, "--format", help="Output format: txt (OmegaT glossary) or csv"),
 ) -> None:
-    _configure_logging()
+    configure_logging()
 
     if not input.exists():
         typer.echo(f"Error: input path does not exist: {input}", err=True)
@@ -96,7 +86,7 @@ def rate(
     batch_size: int = typer.Option(15, "--batch-size", help="Number of terms per Ollama request"),
 ) -> None:
     """Rate extracted glossary candidates using a local Ollama model."""
-    _configure_logging()
+    configure_logging()
 
     if not input.exists():
         typer.echo(f"Error: input file does not exist: {input}", err=True)

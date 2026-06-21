@@ -2,9 +2,12 @@ from functools import lru_cache
 from pathlib import Path
 
 import jinja2
+import structlog
 
 from config import get_settings
 from models import TranslateRequest
+
+log = structlog.get_logger()
 
 _TEMPLATE_DIR = Path(__file__).parent
 
@@ -24,9 +27,12 @@ def _load_style_rules() -> list[str]:
     """Load style rules from the configured file, one rule per line."""
     path = get_settings().style_rules_path
     if not path or not path.exists():
+        log.debug("style_rules_not_configured", path=str(path) if path else None)
         return []
     lines = path.read_text(encoding="utf-8").splitlines()
-    return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
+    rules = [line.strip() for line in lines if line.strip() and not line.startswith("#")]
+    log.info("style_rules_loaded", path=str(path), rule_count=len(rules))
+    return rules
 
 
 def build_prompt(request: TranslateRequest, file_summary: str | None = None) -> str:
