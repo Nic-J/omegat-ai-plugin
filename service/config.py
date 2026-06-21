@@ -1,7 +1,10 @@
 from functools import lru_cache
 from pathlib import Path
 
+from platformdirs import user_data_path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEFAULT_STATE_DB_PATH = user_data_path("omegat-ai-service") / "state.db"
 
 
 class Settings(BaseSettings):
@@ -28,11 +31,14 @@ class Settings(BaseSettings):
 
     # ── File paths ────────────────────────────────────────────────────────────
     # Path to a plain-text file of style rules injected into the translation
-    # prompt (one rule per line). Leave unset to skip.
-    style_rules_path: Path | None = "service/style_rules.txt"
+    # prompt (one rule per line). Unset by default (opt-in) — style rules are
+    # simply not injected until you set STYLE_RULES_PATH in .env to an absolute path.
+    style_rules_path: Path | None = None
 
     # Shared SQLite database for all plugin state (glossary + file summaries).
-    state_db_path: Path | None = "state.db"
+    # Defaults to a platform-appropriate user data dir so the service works
+    # correctly regardless of the directory it's launched from.
+    state_db_path: Path | None = _DEFAULT_STATE_DB_PATH
 
     # ── Glossary agent tuning ─────────────────────────────────────────────────
     # Maximum number of candidate terms sent to Termium / OQLF for lookup.
