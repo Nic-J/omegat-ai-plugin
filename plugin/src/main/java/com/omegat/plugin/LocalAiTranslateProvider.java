@@ -178,10 +178,12 @@ public class LocalAiTranslateProvider extends BaseTranslate {
         } catch (Exception ignored) {}
 
         String currentFilePath = currentEntry != null ? currentEntry.getKey().file : null;
+        String styleRules = loadProjectStyleRules();
 
         String requestBody = buildTranslateJson(
             text, sLang.getLanguage(), tLang.getLanguage(),
-            currentFilePath, glossaryEntries, matchesToSend, contextBefore, contextAfter
+            currentFilePath, glossaryEntries, matchesToSend, contextBefore, contextAfter,
+            styleRules
         );
 
         String response = httpPost(SERVICE_URL, requestBody, 30_000);
@@ -191,6 +193,18 @@ public class LocalAiTranslateProvider extends BaseTranslate {
     }
 
     // ── translate() helpers ───────────────────────────────────────────────────
+
+    /** Reads {projectRoot}/ai_style_rules.txt if present; null if absent (service falls back to its global setting). */
+    static String loadProjectStyleRules() {
+        try {
+            String projectRoot = Core.getProject().getProjectProperties().getProjectRoot();
+            Path rulesFile = Paths.get(projectRoot, "ai_style_rules.txt");
+            if (!Files.isRegularFile(rulesFile)) return null;
+            return Files.readString(rulesFile, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     /** [source, translation_or_null] pair for context serialisation. */
     private static String[] contextSegment(SourceTextEntry ste) {
@@ -234,13 +248,15 @@ public class LocalAiTranslateProvider extends BaseTranslate {
     private static String buildTranslateJson(
             String text, String srcLang, String tgtLang, String filePath,
             List<GlossaryEntry> glossary, List<NearString> matches,
-            List<String[]> contextBefore, List<String[]> contextAfter) {
+            List<String[]> contextBefore, List<String[]> contextAfter,
+            String styleRules) {
 
         StringBuilder sb = new StringBuilder("{");
         sb.append("\"source_text\":").append(quoted(text)).append(",");
         sb.append("\"source_lang\":").append(quoted(srcLang)).append(",");
         sb.append("\"target_lang\":").append(quoted(tgtLang)).append(",");
         if (filePath != null) sb.append("\"file_path\":").append(quoted(filePath)).append(",");
+        if (styleRules != null) sb.append("\"style_rules\":").append(quoted(styleRules)).append(",");
 
         sb.append("\"context_before\":[");
         for (int i = 0; i < contextBefore.size(); i++) {

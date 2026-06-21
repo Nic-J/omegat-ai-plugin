@@ -27,6 +27,7 @@ class TranslateRequest(BaseModel):
     source_lang: str
     target_lang: str
     file_path: str | None = None             # looked up server-side to inject file summary
+    style_rules: str | None = None           # project-local rules content; takes priority over the global setting
     glossary: list[GlossaryEntry] = []
     fuzzy_matches: list[FuzzyMatch] = []
     context_before: list[ContextSegment] = []

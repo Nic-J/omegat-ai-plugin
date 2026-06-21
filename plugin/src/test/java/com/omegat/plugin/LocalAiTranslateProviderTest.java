@@ -19,6 +19,15 @@ class LocalAiTranslateProviderTest {
         assertEquals("http://localhost:8000", LocalAiTranslateProvider.resolveServiceBaseUrl());
     }
 
+    // ── loadProjectStyleRules ─────────────────────────────────────────────────
+    // Core.getProject() requires OmegaT's full runtime, which isn't bootstrapped in plain
+    // unit tests, so this always exercises the fallback branch and returns null.
+
+    @Test
+    void loadProjectStyleRules_returnsNullOutsideOmegatRuntime() {
+        assertNull(LocalAiTranslateProvider.loadProjectStyleRules());
+    }
+
     // ── extractStringField ────────────────────────────────────────────────────
 
     @Test

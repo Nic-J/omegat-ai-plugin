@@ -59,6 +59,22 @@ class TestBuildPrompt:
             prompt = build_prompt(make_request())
         assert "Style rules" not in prompt
 
+    def test_request_style_rules_take_priority_over_global(self):
+        request = make_request(style_rules="Use formal tone.\n# a comment\nAvoid contractions.")
+        with patch("translation.prompt._load_style_rules", return_value=["Global rule should not appear."]):
+            prompt = build_prompt(request)
+        assert "Use formal tone." in prompt
+        assert "Avoid contractions." in prompt
+        assert "Global rule should not appear." not in prompt
+        assert "a comment" not in prompt
+
+    def test_empty_request_style_rules_omits_section(self):
+        request = make_request(style_rules="")
+        with patch("translation.prompt._load_style_rules", return_value=["Global rule should not appear."]):
+            prompt = build_prompt(request)
+        assert "Style rules" not in prompt
+        assert "Global rule should not appear." not in prompt
+
     def test_context_before_with_translation_appears_in_prompt(self):
         request = make_request(
             context_before=[ContextSegment(source="Open the file.", translation="Ouvrez le fichier.")]
