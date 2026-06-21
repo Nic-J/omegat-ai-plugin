@@ -10,6 +10,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class LocalAiTranslateProviderTest {
 
+    // ── resolveServiceBaseUrl ─────────────────────────────────────────────────
+    // Preferences requires OmegaT's full runtime, which isn't bootstrapped in plain unit
+    // tests, so this always exercises the fallback branch and returns the default.
+
+    @Test
+    void resolveServiceBaseUrl_fallsBackToDefaultOutsideOmegatRuntime() {
+        assertEquals("http://localhost:8000", LocalAiTranslateProvider.resolveServiceBaseUrl());
+    }
+
     // ── extractStringField ────────────────────────────────────────────────────
 
     @Test

@@ -11,6 +11,7 @@ import org.omegat.core.machinetranslators.BaseTranslate;
 import org.omegat.core.matching.NearString;
 import org.omegat.gui.glossary.GlossaryEntry;
 import org.omegat.util.Language;
+import org.omegat.util.Preferences;
 
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
@@ -45,11 +46,27 @@ import java.util.stream.Collectors;
  */
 public class LocalAiTranslateProvider extends BaseTranslate {
 
-    private static final String SERVICE_URL          = "http://localhost:8000/translate";
-    private static final String GLOSSARY_URL         = "http://localhost:8000/prepare-glossary";
-    private static final String GLOSSARY_STATUS_URL  = "http://localhost:8000/glossary/status";
-    private static final String GLOSSARY_DEFER_URL   = "http://localhost:8000/glossary/defer";
-    private static final String FILE_SUMMARY_URL     = "http://localhost:8000/file-summary/generate";
+    private static final String DEFAULT_SERVICE_BASE_URL = "http://localhost:8000";
+
+    // Base URL for the AI translation service. Override via the "ai_translation_service_url"
+    // key in OmegaT preferences (omegat.prefs) if the service runs on a different host/port.
+    // Preferences is only initialized once OmegaT's full runtime is bootstrapped, so fall back
+    // to the default outside that context (e.g. plain unit tests run this class in isolation).
+    private static final String SERVICE_BASE_URL = resolveServiceBaseUrl();
+
+    static String resolveServiceBaseUrl() {
+        try {
+            return Preferences.getPreferenceDefault("ai_translation_service_url", DEFAULT_SERVICE_BASE_URL);
+        } catch (Throwable e) {
+            return DEFAULT_SERVICE_BASE_URL;
+        }
+    }
+
+    private static final String SERVICE_URL          = SERVICE_BASE_URL + "/translate";
+    private static final String GLOSSARY_URL         = SERVICE_BASE_URL + "/prepare-glossary";
+    private static final String GLOSSARY_STATUS_URL  = SERVICE_BASE_URL + "/glossary/status";
+    private static final String GLOSSARY_DEFER_URL   = SERVICE_BASE_URL + "/glossary/defer";
+    private static final String FILE_SUMMARY_URL     = SERVICE_BASE_URL + "/file-summary/generate";
 
     private static final int MAX_FUZZY_MATCHES    = 3;
     private static final int CONTEXT_BEFORE_COUNT = 1;
