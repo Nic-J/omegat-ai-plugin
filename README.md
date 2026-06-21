@@ -82,6 +82,40 @@ You can also override the global style rules per OmegaT project: drop an
 project's root folder and it takes priority over `STYLE_RULES_PATH` for
 translations done in that project.
 
+## Adding your own research tool
+
+There's no bundled web-search tool — that would mean shipping an extra
+dependency, a per-provider API quirk, and a key to manage for something most
+users won't need. Instead, the glossary agent (`service/glossary/agent.py`) is
+structured so adding your own [PydanticAI tool](https://ai.pydantic.dev/tools/)
+is ~15 lines. This works the same whether `AI_MODEL`/`GLOSSARY_MODEL` is Ollama
+or a cloud model.
+
+Worked example — a DuckDuckGo web-search tool (no API key required), added
+right after `_TOOL_NAMES = _register_terminology_tools(_glossary_agent)`:
+
+```python
+@_glossary_agent.tool
+async def fetch_duckduckgo(ctx: RunContext[GlossaryDeps], term: str) -> str:
+    """Web-search a term on DuckDuckGo and return stripped result text."""
+    url = f"https://html.duckduckgo.com/html/?q={term}"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url, follow_redirects=True)
+        return _strip_html(resp.text) if resp.status_code == 200 else f"HTTP {resp.status_code}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+_TOOL_NAMES.append("fetch_duckduckgo")
+```
+
+The `_TOOL_NAMES.append(...)` line matters: Phase 2's prompt tells the LLM
+which tools it can call by joining `_TOOL_NAMES`, so a tool the LLM doesn't
+know exists will never get called. Same idea applies to a corporate glossary
+API, Tavily, or anything else with an HTTP endpoint — fetch, return text, and
+register the name.
+
 ## Usage
 
 1. In OmegaT: **Options → Machine Translate** → enable "AI Translation Assistant"
