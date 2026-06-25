@@ -1,5 +1,8 @@
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
+import translation.agent as translation_agent
 from main import app
 
 client = TestClient(app)
@@ -83,6 +86,33 @@ def test_translate_glossary_with_comment():
     )
     assert response.status_code == 200
     assert response.json()["glossary_applied"] is True
+
+
+def test_translate_passes_style_rules_into_prompt():
+    """Contract guard: a style_rules value in the /translate body must reach the prompt the
+    model receives (plugin → service → prompt). Catches a regression that silently drops them."""
+    captured = {}
+    real_build_prompt = translation_agent.build_prompt
+
+    def spy(request, file_summary=None):
+        prompt = real_build_prompt(request, file_summary=file_summary)
+        captured["prompt"] = prompt
+        return prompt
+
+    with patch.object(translation_agent, "build_prompt", side_effect=spy):
+        response = client.post(
+            "/translate",
+            json={
+                "source_text": "the directors",
+                "source_lang": "EN",
+                "target_lang": "FR-CA",
+                "style_rules": "Use the median point for gender-inclusive forms, e.g. directeur·trice·s.",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "median point" in captured["prompt"]
+    assert "directeur·trice·s" in captured["prompt"]
 
 
 def test_translate_fuzzy_match_with_full_fields():

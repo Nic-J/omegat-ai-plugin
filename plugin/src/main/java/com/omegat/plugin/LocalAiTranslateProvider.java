@@ -264,7 +264,9 @@ public class LocalAiTranslateProvider extends BaseTranslate {
 
     // ── JSON serialisation ────────────────────────────────────────────────────
 
-    private static String buildTranslateJson(
+    // Package-visible (not private) so unit tests can assert the request JSON it builds,
+    // e.g. that style_rules is included when present and omitted when null.
+    static String buildTranslateJson(
             String text, String srcLang, String tgtLang, String filePath,
             List<GlossaryEntry> glossary, List<NearString> matches,
             List<String[]> contextBefore, List<String[]> contextAfter,

@@ -133,6 +133,33 @@ class LocalAiTranslateProviderTest {
         assertFalse(json.contains("existing_terms"));
     }
 
+    // ── buildTranslateJson (style_rules delivery) ─────────────────────────────
+    // Uses the median point (·) from gender-inclusive French forms. The expected and
+    // actual strings reuse the same `styleRules` variable, so the assertion is immune to
+    // source-file encoding either way.
+
+    @Test
+    void buildTranslateJson_includesStyleRulesWhenPresent() {
+        String styleRules = "Use the median point for gender-inclusive forms, e.g. directeur·trice·s.";
+        String json = LocalAiTranslateProvider.buildTranslateJson(
+            "the directors", "EN", "FR-CA", null,
+            Collections.emptyList(), Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(),
+            styleRules, null);
+        assertTrue(json.contains("\"style_rules\":\"" + styleRules + "\""),
+            "style_rules must be serialized into the translate request when provided");
+    }
+
+    @Test
+    void buildTranslateJson_omitsStyleRulesWhenNull() {
+        String json = LocalAiTranslateProvider.buildTranslateJson(
+            "the directors", "EN", "FR-CA", null,
+            Collections.emptyList(), Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(),
+            null, null);
+        assertFalse(json.contains("style_rules"));
+    }
+
     // ── parseSuggestions ──────────────────────────────────────────────────────
 
     @Test
