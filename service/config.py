@@ -30,9 +30,11 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
 
     # ── File paths ────────────────────────────────────────────────────────────
-    # Path to a plain-text file of style rules injected into the translation
-    # prompt (one rule per line). Unset by default (opt-in) — style rules are
-    # simply not injected until you set STYLE_RULES_PATH in .env to an absolute path.
+    # Path to a GLOBAL plain-text file of style rules injected into the translation
+    # prompt (one rule per line; see ai_style_rules.example.txt). Unset by default
+    # (opt-in) — not injected until you set STYLE_RULES_PATH in .env to an absolute
+    # path. A per-project file named exactly "ai_style_rules.txt" in an OmegaT
+    # project root overrides this for that project (handled plugin-side).
     style_rules_path: Path | None = None
 
     # Shared SQLite database for all plugin state (glossary + file summaries).

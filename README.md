@@ -61,7 +61,7 @@ All service settings live in `service/.env` (see `service/.env.example` for the 
 | `AI_MODEL` | `ollama:mistral-nemo` | Model used for translation |
 | `GLOSSARY_MODEL` | _(falls back to `AI_MODEL`)_ | Model used for glossary web research — benefits from a stronger model |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama instance |
-| `STYLE_RULES_PATH` | _(unset)_ | Path to a style-rules file injected into the translation prompt — copy `service/style_rules.example.txt` to get started |
+| `STYLE_RULES_PATH` | _(unset)_ | Path to a global style-rules file injected into the translation prompt — copy `service/ai_style_rules.example.txt` to get started |
 | `STATE_DB_PATH` | platform user data dir | SQLite DB for glossary/summary/translation-memory state |
 | `GLOSSARY_MAX_TERMS` | `20` | Max candidate terms sent for terminology lookup |
 | `GLOSSARY_MAX_PAGE_CHARS` | `3000` | Max characters of fetched page text passed to the LLM per lookup |
@@ -78,10 +78,20 @@ Terminology, a corporate glossary API, etc.) or disable the defaults, copy
 and edit it — no code changes needed. Each entry becomes a tool the glossary
 agent can call.
 
-You can also override the global style rules per OmegaT project: drop an
-`ai_style_rules.txt` file (same format as `style_rules.example.txt`) in the
-project's root folder and it takes priority over `STYLE_RULES_PATH` for
-translations done in that project.
+### Style rules: global default and per-project override
+
+Style rules are resolved in two layers, with the per-project file taking priority:
+
+- **Global default** — set `STYLE_RULES_PATH` in `service/.env` to a file (copy
+  `service/ai_style_rules.example.txt`). Applies to every project.
+- **Per-project override** — place a file named **exactly `ai_style_rules.txt`**
+  in the OmegaT **project's root folder** (next to `omegat.project`). When present
+  it replaces the global rules for translations in that project.
+
+The per-project file must be named exactly `ai_style_rules.txt` — any other name
+(`style_rules.txt`, `ai_style_rules.md`, …) is ignored. The plugin logs which path
+it checked and whether a file was loaded, so check OmegaT's log if rules don't
+seem to apply. Both files use the same format: one rule per line, `#` for comments.
 
 ## Translation memory cache
 

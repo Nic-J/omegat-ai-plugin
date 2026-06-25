@@ -1,6 +1,11 @@
 # Style rules for AI translation — one rule per line.
-# Copy this file, fill in your rules, and set STYLE_RULES_PATH in .env.
 # Lines starting with # are ignored.
+#
+# Two ways to use this file (per-project takes priority over global):
+#   • Per-project: copy it into an OmegaT project's root folder, named EXACTLY
+#     "ai_style_rules.txt". The plugin loads it only under that exact name.
+#   • Global default: copy it anywhere, fill in your rules, and point
+#     STYLE_RULES_PATH in service/.env at that path.
 
 # Example rules:
 Use inclusive gender forms where applicable (e.g. "les membres" not gender-specific forms).
