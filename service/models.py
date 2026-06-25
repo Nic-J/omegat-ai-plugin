@@ -41,6 +41,7 @@ class TranslateResponse(BaseModel):
     target_lang: str
     glossary_applied: bool
     fuzzy_match_used: bool
+    from_cache: bool = False
 
 
 class GlossaryPrepRequest(BaseModel):

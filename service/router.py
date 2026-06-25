@@ -6,7 +6,9 @@ from glossary import agent as glossary_agent
 from glossary import state as glossary_state
 from summary import agent as summary_agent
 from summary import state as summary_state
+from tm import state as tm_state
 from translation import agent as translator
+from translation.prompt import resolve_style_rules
 from models import (
     FileSummaryRequest,
     FileSummaryResponse,
@@ -34,7 +36,25 @@ async def translate(
             request.file_path, project_id=request.project_id or "", db_path=settings.state_db_path
         )
 
-    translated_text = await translator.translate(request, file_summary=file_summary)
+    project_id = request.project_id or ""
+    cache_key = tm_state.compute_key(
+        request.source_text, request.source_lang, request.target_lang,
+        request.glossary, resolve_style_rules(request), settings.ai_model,
+    )
+    cached = tm_state.get(cache_key, project_id=project_id, db_path=settings.state_db_path)
+
+    if cached is not None:
+        log.info("tm_cache_hit", file_path=request.file_path, cache_key=cache_key)
+        translated_text = cached
+        from_cache = True
+    else:
+        log.info("tm_cache_miss", file_path=request.file_path, cache_key=cache_key)
+        translated_text = await translator.translate(request, file_summary=file_summary)
+        tm_state.save(
+            cache_key, request.source_text, request.source_lang, request.target_lang,
+            translated_text, settings.ai_model, project_id=project_id, db_path=settings.state_db_path,
+        )
+        from_cache = False
 
     response = TranslateResponse(
         translated_text=translated_text,
@@ -42,6 +62,7 @@ async def translate(
         target_lang=request.target_lang,
         glossary_applied=bool(request.glossary),
         fuzzy_match_used=bool(request.fuzzy_matches),
+        from_cache=from_cache,
     )
     log.info("translate_response", file_path=request.file_path,
              summary_injected=file_summary is not None, **response.model_dump())

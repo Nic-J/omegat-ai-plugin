@@ -8,6 +8,7 @@ via Anthropic/Google APIs.
 ## Features
 
 - AI translation with glossary enforcement, fuzzy-match context, and surrounding-segment context
+- Server-side translation memory cache — repeat segments return instantly with no extra LLM call
 - Automatic document summarization, injected into each translation request for better context
 - Glossary extraction from configurable terminology databases (Termium, OQLF — extensible to your own)
 - Works with any model via Ollama (local, free) or Anthropic/Google APIs (cloud)
@@ -61,7 +62,7 @@ All service settings live in `service/.env` (see `service/.env.example` for the 
 | `GLOSSARY_MODEL` | _(falls back to `AI_MODEL`)_ | Model used for glossary web research — benefits from a stronger model |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama instance |
 | `STYLE_RULES_PATH` | _(unset)_ | Path to a style-rules file injected into the translation prompt — copy `service/style_rules.example.txt` to get started |
-| `STATE_DB_PATH` | platform user data dir | SQLite DB for glossary/summary state |
+| `STATE_DB_PATH` | platform user data dir | SQLite DB for glossary/summary/translation-memory state |
 | `GLOSSARY_MAX_TERMS` | `20` | Max candidate terms sent for terminology lookup |
 | `GLOSSARY_MAX_PAGE_CHARS` | `3000` | Max characters of fetched page text passed to the LLM per lookup |
 | `TERMINOLOGY_SOURCES_PATH` | `terminology_sources.toml` | TOML file listing terminology lookup sources — copy `service/terminology_sources.toml.example` to customize |
@@ -81,6 +82,22 @@ You can also override the global style rules per OmegaT project: drop an
 `ai_style_rules.txt` file (same format as `style_rules.example.txt`) in the
 project's root folder and it takes priority over `STYLE_RULES_PATH` for
 translations done in that project.
+
+## Translation memory cache
+
+`/translate` caches each translation in SQLite, keyed by an exact-match hash of
+`source_text` + `source_lang` + `target_lang` + `glossary` + resolved
+`style_rules` + the model. OmegaT's MT pane re-queries on every revisit (with
+repeat-suppression disabled), so without this, the same segment would trigger
+a fresh, billable LLM call each time — the cache returns the stored
+translation instantly instead, and only calls the LLM for genuinely new or
+changed input. Editing the glossary, changing style rules, or switching model
+busts the cache automatically. The cache is scoped per OmegaT project
+(`project_id`) and excludes surrounding context (fuzzy matches, file summary)
+from the key — same source text in different context returns one cached
+translation, matching how OmegaT's own TM behaves. There's no eviction; a
+changed key just orphans the old row, which is fine at single-user scale. The
+`/translate` response includes `from_cache: true` when served from the cache.
 
 ## Adding your own research tool
 
@@ -128,7 +145,7 @@ register the name.
 OmegaT  ──▶  Plugin (Java, JAR)  ──▶  Service (Python, FastAPI)  ──▶  LLM (Ollama / Anthropic / Google)
                                             │
                                             ▼
-                                  SQLite (glossary + summary state)
+                            SQLite (glossary + summary + translation memory)
 ```
 
 The plugin never reads files directly from the service's perspective — all

@@ -40,12 +40,20 @@ def _load_style_rules() -> list[str]:
     return rules
 
 
-def build_prompt(request: TranslateRequest, file_summary: str | None = None) -> str:
-    # Request-level rules (project-local file, sent by the plugin) take priority over the global setting.
+def resolve_style_rules(request: TranslateRequest) -> list[str]:
+    """Resolve the style rules actually used for a request.
+
+    Request-level rules (project-local file, sent by the plugin) take priority
+    over the global setting. Shared by build_prompt and the translation memory
+    cache key, so both agree on what was "actually used".
+    """
     if request.style_rules is not None:
-        style_rules = _parse_style_rules(request.style_rules)
-    else:
-        style_rules = _load_style_rules()
+        return _parse_style_rules(request.style_rules)
+    return _load_style_rules()
+
+
+def build_prompt(request: TranslateRequest, file_summary: str | None = None) -> str:
+    style_rules = resolve_style_rules(request)
 
     return _get_template().render(
         source_lang=request.source_lang,
