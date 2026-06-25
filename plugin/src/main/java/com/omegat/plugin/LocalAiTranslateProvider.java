@@ -14,6 +14,7 @@ import org.omegat.util.Language;
 import org.omegat.util.Log;
 import org.omegat.util.Preferences;
 
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.io.BufferedReader;
@@ -80,6 +81,20 @@ public class LocalAiTranslateProvider extends BaseTranslate {
     // project per session instead of once per translated segment (translate() runs per segment).
     private static final Set<String> styleRulesLogged = ConcurrentHashMap.newKeySet();
 
+    // Project roots for which the near-miss style-rules popup has already been shown this session.
+    private static final Set<String> nearMissShown = ConcurrentHashMap.newKeySet();
+
+    // Template written by the "Create AI style rules file" menu action.
+    private static final String STYLE_RULES_TEMPLATE =
+        "# Style rules for AI translation — one rule per line.\n"
+        + "# Lines starting with # are ignored.\n"
+        + "#\n"
+        + "# Add one rule per line below. Example rules:\n"
+        + "#   Use inclusive gender forms where applicable.\n"
+        + "#   Follow the client's preferred terminology for technical terms.\n"
+        + "#   Use formal register in all target text.\n"
+        + "\n";
+
     // ── Plugin lifecycle ──────────────────────────────────────────────────────
 
     /** Called by OmegaT at startup to register this provider and event listeners. */
@@ -93,8 +108,10 @@ public class LocalAiTranslateProvider extends BaseTranslate {
                 // Safety net: onNewFile may fire before isProjectLoaded() returns true;
                 // re-check after the project LOAD event to cover that timing edge case.
                 listener.checkCurrentFile();
+                new Thread(LocalAiTranslateProvider::checkStyleRulesNearMiss, "style-rules-checker").start();
             }
         });
+        SwingUtilities.invokeLater(LocalAiTranslateProvider::registerStyleRulesMenuItem);
     }
 
     /** Called by OmegaT at shutdown. */
@@ -241,6 +258,127 @@ public class LocalAiTranslateProvider extends BaseTranslate {
             }
             Log.log(e);
             return null;
+        }
+    }
+
+    /**
+     * On project LOAD, scans the project root for a file that looks like a style-rules file
+     * but is wrongly named. If found, offers a rename popup (once per project per session).
+     * Also flags the canonical file if it exists but can't be read.
+     */
+    static void checkStyleRulesNearMiss() {
+        String projectRoot;
+        try {
+            projectRoot = Core.getProject().getProjectProperties().getProjectRoot();
+        } catch (Exception e) {
+            return; // No project loaded — not an error
+        }
+
+        if (!nearMissShown.add(projectRoot)) return; // Already shown this session
+
+        Path root = Paths.get(projectRoot);
+        Path canonical = root.resolve("ai_style_rules.txt");
+
+        if (Files.exists(canonical)) {
+            if (!Files.isReadable(canonical)) {
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null,
+                    "Found \"ai_style_rules.txt\" in this project but it can't be read.\n"
+                    + "Check file permissions at:\n" + canonical,
+                    "AI Translation Assistant: Style Rules", JOptionPane.WARNING_MESSAGE));
+            }
+            return;
+        }
+
+        Path nearMiss = findNearMissStyleRulesFile(root);
+        if (nearMiss == null) return;
+
+        String nearMissName = nearMiss.getFileName().toString();
+        SwingUtilities.invokeLater(() -> {
+            int choice = JOptionPane.showConfirmDialog(null,
+                "Found \"" + nearMissName + "\" in your project folder.\n"
+                + "Style rules only load from a file named exactly \"ai_style_rules.txt\".\n"
+                + "Rename it now?",
+                "AI Translation Assistant: Style Rules",
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (choice == JOptionPane.YES_OPTION) {
+                try {
+                    Files.move(nearMiss, canonical);
+                    styleRulesLogged.remove(projectRoot); // force re-log on next translation
+                    JOptionPane.showMessageDialog(null,
+                        "Renamed to \"ai_style_rules.txt\".\n"
+                        + "Style rules will be used from the next translation.",
+                        "AI Translation Assistant", JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(null,
+                        "Could not rename the file: " + ex.getMessage(),
+                        "AI Translation Assistant", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+    }
+
+    /**
+     * Returns the first file in projectRoot whose name contains "style" and "rule"
+     * (case-insensitive) but is neither the canonical "ai_style_rules.txt" nor the
+     * shipped template "ai_style_rules.example.txt". Pure and side-effect-free — safe
+     * to unit-test without the OmegaT runtime.
+     */
+    static Path findNearMissStyleRulesFile(Path projectRoot) {
+        java.io.File[] files = projectRoot.toFile().listFiles();
+        if (files == null) return null;
+        for (java.io.File f : files) {
+            if (!f.isFile()) continue;
+            String name = f.getName();
+            String lower = name.toLowerCase();
+            if (name.equals("ai_style_rules.txt")) continue;
+            if (name.equals("ai_style_rules.example.txt")) continue;
+            if (lower.contains("style") && lower.contains("rule")) return f.toPath();
+        }
+        return null;
+    }
+
+    private static void registerStyleRulesMenuItem() {
+        try {
+            JMenuItem item = new JMenuItem("Create AI style rules file for this project");
+            item.addActionListener(e -> onCreateStyleRulesAction());
+            Core.getMainWindow().getMainMenu().getToolsMenu().add(item);
+        } catch (Throwable t) {
+            // OmegaT menu API unavailable (pre-init or test context) — skip silently
+        }
+    }
+
+    /** Menu action: creates ai_style_rules.txt from the built-in template in the current project. */
+    static void onCreateStyleRulesAction() {
+        String projectRoot;
+        try {
+            projectRoot = Core.getProject().getProjectProperties().getProjectRoot();
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null,
+                "No project is open. Please open an OmegaT project first.",
+                "AI Translation Assistant", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Path rulesFile = Paths.get(projectRoot, "ai_style_rules.txt");
+        if (Files.isRegularFile(rulesFile)) {
+            JOptionPane.showMessageDialog(null,
+                "\"ai_style_rules.txt\" already exists in this project.\nLocation: " + rulesFile,
+                "AI Translation Assistant", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        try {
+            Files.writeString(rulesFile, STYLE_RULES_TEMPLATE, StandardCharsets.UTF_8);
+            styleRulesLogged.remove(projectRoot); // force re-log when next translation loads it
+            JOptionPane.showMessageDialog(null,
+                "Created \"ai_style_rules.txt\" in your project folder.\n"
+                + "Add one style rule per line — lines starting with # are comments.\n\n"
+                + "Location: " + rulesFile,
+                "AI Translation Assistant", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(null,
+                "Could not create the file: " + ex.getMessage(),
+                "AI Translation Assistant", JOptionPane.ERROR_MESSAGE);
         }
     }
 

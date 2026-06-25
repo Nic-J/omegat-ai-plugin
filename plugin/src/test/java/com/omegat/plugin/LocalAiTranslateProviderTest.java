@@ -1,7 +1,10 @@
 package com.omegat.plugin;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -184,5 +187,47 @@ class LocalAiTranslateProviderTest {
     void parseSuggestions_missingTarget_skipped() {
         String json = "{\"suggestions\":[{\"source\":\"foo\"}]}";
         assertEquals(0, LocalAiTranslateProvider.GlossaryExtractionListener.parseSuggestions(json).size());
+    }
+
+    // ── findNearMissStyleRulesFile ─────────────────────────────────────────────
+    // Pure filesystem logic — no OmegaT runtime needed.
+
+    @Test
+    void findNearMissStyleRulesFile_detectsStyleRulesTxt(@TempDir Path dir) throws Exception {
+        Files.createFile(dir.resolve("style_rules.txt"));
+        Path result = LocalAiTranslateProvider.findNearMissStyleRulesFile(dir);
+        assertNotNull(result);
+        assertEquals("style_rules.txt", result.getFileName().toString());
+    }
+
+    @Test
+    void findNearMissStyleRulesFile_ignoresCanonicalName(@TempDir Path dir) throws Exception {
+        Files.createFile(dir.resolve("ai_style_rules.txt"));
+        assertNull(LocalAiTranslateProvider.findNearMissStyleRulesFile(dir));
+    }
+
+    @Test
+    void findNearMissStyleRulesFile_ignoresExampleFile(@TempDir Path dir) throws Exception {
+        Files.createFile(dir.resolve("ai_style_rules.example.txt"));
+        assertNull(LocalAiTranslateProvider.findNearMissStyleRulesFile(dir));
+    }
+
+    @Test
+    void findNearMissStyleRulesFile_detectsMarkdownVariant(@TempDir Path dir) throws Exception {
+        Files.createFile(dir.resolve("ai_style_rules.md"));
+        assertNotNull(LocalAiTranslateProvider.findNearMissStyleRulesFile(dir));
+    }
+
+    @Test
+    void findNearMissStyleRulesFile_returnsNullWhenNoMatch(@TempDir Path dir) throws Exception {
+        Files.createFile(dir.resolve("omegat.project"));
+        Files.createFile(dir.resolve("pending_glossary.txt"));
+        assertNull(LocalAiTranslateProvider.findNearMissStyleRulesFile(dir));
+    }
+
+    @Test
+    void findNearMissStyleRulesFile_caseInsensitive(@TempDir Path dir) throws Exception {
+        Files.createFile(dir.resolve("Style_Rules.TXT"));
+        assertNotNull(LocalAiTranslateProvider.findNearMissStyleRulesFile(dir));
     }
 }
