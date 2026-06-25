@@ -10,7 +10,7 @@ via Anthropic/Google APIs.
 - AI translation with glossary enforcement, fuzzy-match context, and surrounding-segment context
 - Server-side translation memory cache — repeat segments return instantly with no extra LLM call
 - Automatic document summarization, injected into each translation request for better context
-- Glossary extraction from configurable terminology databases (Termium, OQLF — extensible to your own)
+- Glossary extraction: LLM identifies candidate terms from each file; authoritative EN↔FR translations looked up from a local terminology index (import Termium/OQLF open-data once via CLI)
 - Works with any model via Ollama (local, free) or Anthropic/Google APIs (cloud)
 
 ## Prerequisites
@@ -65,18 +65,38 @@ All service settings live in `service/.env` (see `service/.env.example` for the 
 | `STATE_DB_PATH` | platform user data dir | SQLite DB for glossary/summary/translation-memory state |
 | `GLOSSARY_MAX_TERMS` | `20` | Max candidate terms sent for terminology lookup |
 | `GLOSSARY_MAX_PAGE_CHARS` | `3000` | Max characters of fetched page text passed to the LLM per lookup |
-| `TERMINOLOGY_SOURCES_PATH` | `terminology_sources.toml` | TOML file listing terminology lookup sources — copy `service/terminology_sources.toml.example` to customize |
+| `TERMINOLOGY_SOURCES_PATH` | `terminology_sources.toml` | TOML file for optional live HTTP terminology sources — see `service/terminology_sources.toml.example` |
 
 The OmegaT plugin's service URL is configurable via the OmegaT preferences key
 `ai_translation_service_url` (default `http://localhost:8000`) — set it in
 `omegat.prefs` if you run the service on a different host or port.
 
-Glossary lookup ships with Termium and OQLF (Canadian EN↔FR terminology
-databases) as built-in defaults. To add your own sources (IATE, Microsoft
-Terminology, a corporate glossary API, etc.) or disable the defaults, copy
-`service/terminology_sources.toml.example` to `service/terminology_sources.toml`
-and edit it — no code changes needed. Each entry becomes a tool the glossary
-agent can call.
+### Terminology index (Termium / OQLF)
+
+Glossary extraction looks up candidate terms in a **local SQLite index** — fast,
+offline, no per-request network call. The index is empty until you import data.
+Import Termium and/or OQLF once using the CLI:
+
+```sh
+cd service
+
+# OQLF Grand dictionnaire terminologique (single CSV, all domains)
+curl -L "https://www.donneesquebec.ca/recherche/dataset/1c6567bf-8995-40b9-84a4-50faabae12f4/resource/c3ce0af4-7c0f-4dd2-b53a-6dc7fb3ea5ef/download/fiches_recentes_signees_oqlf_2026-01-19.csv" \
+  -o oqlf.csv
+uv run python -m glossary.cli import-terminology oqlf.csv --preset oqlf
+
+# Termium (one ZIP per subject — repeat for each subject you need)
+curl -L "https://donnees-data.tpsgc-pwgsc.gc.ca/bt1/tp-tp/domaine-subject-construction.zip" \
+  -o construction.zip && unzip construction.zip
+uv run python -m glossary.cli import-terminology "Construction_*.csv" --preset termium
+```
+
+Both sources are open data (OGL-Canada / Données Québec). The index persists in
+`state.db` — re-run the import commands to refresh when updated exports are released.
+
+To add your own live HTTP sources (IATE, Microsoft Terminology, a corporate API),
+copy `service/terminology_sources.toml.example` to `service/terminology_sources.toml`
+and enable the entries you want — no code changes needed.
 
 ### Style rules: global default and per-project override
 
@@ -111,17 +131,16 @@ changed key just orphans the old row, which is fine at single-user scale. The
 
 ## Adding your own research tool
 
-There's no bundled web-search tool — that would mean shipping an extra
-dependency, a per-provider API quirk, and a key to manage for something most
-users won't need. Instead, the glossary agent (`service/glossary/agent.py`) is
-structured so adding your own [PydanticAI tool](https://ai.pydantic.dev/tools/)
-is ~15 lines. This works the same whether `AI_MODEL`/`GLOSSARY_MODEL` is Ollama
-or a cloud model.
+The glossary agent (`service/glossary/agent.py`) is structured so adding your
+own [PydanticAI tool](https://ai.pydantic.dev/tools/) is ~10 lines alongside
+the existing `lookup_terminology` tool. This works the same whether
+`AI_MODEL`/`GLOSSARY_MODEL` is Ollama or a cloud model.
 
-Worked example — a DuckDuckGo web-search tool (no API key required), added
-right after `_TOOL_NAMES = _register_terminology_tools(_glossary_agent)`:
+Worked example — a DuckDuckGo web-search tool (no API key required):
 
 ```python
+import httpx2 as httpx  # already a transitive dep; add to imports in agent.py
+
 @_glossary_agent.tool
 async def fetch_duckduckgo(ctx: RunContext[GlossaryDeps], term: str) -> str:
     """Web-search a term on DuckDuckGo and return stripped result text."""
@@ -132,16 +151,11 @@ async def fetch_duckduckgo(ctx: RunContext[GlossaryDeps], term: str) -> str:
         return _strip_html(resp.text) if resp.status_code == 200 else f"HTTP {resp.status_code}"
     except Exception as e:
         return f"Error: {e}"
-
-
-_TOOL_NAMES.append("fetch_duckduckgo")
 ```
 
-The `_TOOL_NAMES.append(...)` line matters: Phase 2's prompt tells the LLM
-which tools it can call by joining `_TOOL_NAMES`, so a tool the LLM doesn't
-know exists will never get called. Same idea applies to a corporate glossary
-API, Tavily, or anything else with an HTTP endpoint — fetch, return text, and
-register the name.
+Update the Phase 2 prompt in `extract_glossary` to mention the new tool name so
+the LLM knows it can call it. Same idea applies to a corporate glossary API,
+Tavily, or anything with an HTTP endpoint — fetch, return text, reference in prompt.
 
 ## Usage
 

@@ -56,6 +56,56 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def import_rows(
+    parsed_rows: list[dict],
+    column_mapping: dict[str, str],
+    source_label: str,
+    source_lang: str,
+    target_lang: str,
+    db_path: Path | None = None,
+) -> int:
+    """
+    Insert pre-parsed rows (list of dicts, e.g. from csv.DictReader) into the
+    terminology table. Rows with an empty source or target term are skipped.
+    Returns the number of rows inserted.
+
+    Callers that need pre-processing before insert (e.g. expanding semicolon-
+    separated OQLF variants) should transform their rows first, then call this.
+    """
+    src_col  = column_mapping["source_term"]
+    tgt_col  = column_mapping["target_term"]
+    subj_col = column_mapping.get("subject")
+
+    rows: list[tuple] = []
+    for row in parsed_rows:
+        source_term = (row.get(src_col) or "").strip()
+        target_term = (row.get(tgt_col) or "").strip()
+        if not source_term or not target_term:
+            continue
+        subject = (row.get(subj_col) or "").strip() if subj_col else None
+        rows.append((
+            source_label,
+            source_lang.upper(),
+            target_lang.upper(),
+            source_term,
+            target_term,
+            subject or None,
+            normalize(source_term),
+        ))
+
+    db = db_path or _default_db_path()
+    with _connect(db) as conn:
+        conn.executemany(
+            "INSERT INTO terminology "
+            "(source, source_lang, target_lang, source_term, target_term, subject, normalized_source) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        conn.commit()
+
+    return len(rows)
+
+
 def import_csv(
     csv_path: Path,
     column_mapping: dict[str, str],
@@ -77,41 +127,11 @@ def import_csv(
     Rows with an empty source or target term are skipped.
     Returns the number of rows inserted.
     """
-    src_col  = column_mapping["source_term"]
-    tgt_col  = column_mapping["target_term"]
-    subj_col = column_mapping.get("subject")
-
-    rows: list[tuple] = []
     with open(csv_path, encoding=encoding, newline="") as f:
-        reader = csv.DictReader(f, delimiter=delimiter)
-        for row in reader:
-            source_term = (row.get(src_col) or "").strip()
-            target_term = (row.get(tgt_col) or "").strip()
-            if not source_term or not target_term:
-                continue
-            subject = (row.get(subj_col) or "").strip() if subj_col else None
-            rows.append((
-                source_label,
-                source_lang.upper(),
-                target_lang.upper(),
-                source_term,
-                target_term,
-                subject or None,
-                normalize(source_term),
-            ))
-
-    db = db_path or _default_db_path()
-    with _connect(db) as conn:
-        conn.executemany(
-            "INSERT INTO terminology "
-            "(source, source_lang, target_lang, source_term, target_term, subject, normalized_source) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            rows,
-        )
-        conn.commit()
-
-    log.info("terminology_imported", source=source_label, path=str(csv_path), count=len(rows))
-    return len(rows)
+        parsed_rows = list(csv.DictReader(f, delimiter=delimiter))
+    count = import_rows(parsed_rows, column_mapping, source_label, source_lang, target_lang, db_path)
+    log.info("terminology_imported", source=source_label, path=str(csv_path), count=count)
+    return count
 
 
 def lookup_term(

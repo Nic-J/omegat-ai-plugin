@@ -5,13 +5,13 @@ from glossary.sources import TerminologySource, build_url, load_terminology_sour
 
 
 class TestLoadTerminologySources:
-    def test_falls_back_to_builtin_defaults_when_no_file(self):
+    def test_falls_back_to_empty_when_no_file(self):
+        # Termium/OQLF are no longer live-fetched; no built-in sources ship by default.
+        # Users populate the local index via CLI import instead (OMP-013/019).
         settings = Settings(terminology_sources_path=None)
         with patch("glossary.sources.get_settings", return_value=settings):
             sources = load_terminology_sources()
-        names = [s.name for s in sources]
-        assert "termium" in names
-        assert "oqlf" in names
+        assert sources == []
 
     def test_loads_custom_toml_file(self, tmp_path):
         toml_file = tmp_path / "terminology_sources.toml"

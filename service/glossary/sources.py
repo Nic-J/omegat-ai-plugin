@@ -8,19 +8,12 @@ from pydantic import BaseModel
 
 from config import get_settings
 
+# Termium and OQLF are no longer fetched live — both are bot-blocked (OQLF: AWS WAF
+# JS challenge; Termium: timeout for non-browser clients). Terminology data is now
+# imported once into a local SQLite index via:
+#   uv run python -m glossary.cli import-terminology <file> --preset termium/oqlf
+# This file remains as an extension point for user-supplied live HTTP sources.
 _BUILTIN_SOURCES_TOML = """
-[[sources]]
-name = "termium"
-enabled = true
-description = "Canadian government bilingual terminology"
-url_template = "https://www.btb.termiumplus.gc.ca/tpv2alpha/alpha-eng.html?lang={lang}&srchtxt={term}&index=enb"
-lang_map = { EN = "eng", FR = "fra" }
-
-[[sources]]
-name = "oqlf"
-enabled = true
-description = "Quebec French terminology"
-url_template = "https://vitrinelinguistique.oqlf.gouv.qc.ca/resultats-de-recherche?tx_solr[q]={term}&tx_solr[filter][]=type_stringM:gdt"
 """
 
 

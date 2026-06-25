@@ -8,6 +8,7 @@ from logging_config import configure_logging
 
 from .extractor import extract_from_dir, extract_from_file
 from .rater import rate_csv
+from .presets import PRESETS, import_preset as _import_preset
 from .terminology import import_csv as _import_csv
 from .writer import write_csv, write_glossary
 
@@ -101,33 +102,55 @@ def rate(
 @app.command("import-terminology")
 def import_terminology(
     csv_path: Path = typer.Argument(..., help="CSV file to import"),
-    source: str = typer.Option(..., "--source", help='Dataset label, e.g. "termium" or "oqlf"'),
-    src_lang: str = typer.Option(..., "--src-lang", help="Source language code (e.g. EN)"),
-    tgt_lang: str = typer.Option(..., "--tgt-lang", help="Target language code (e.g. FR)"),
-    source_col: str = typer.Option(..., "--source-col", help="CSV column name for the source-language term"),
-    target_col: str = typer.Option(..., "--target-col", help="CSV column name for the target-language term"),
-    subject_col: str | None = typer.Option(None, "--subject-col", help="CSV column name for subject/domain (optional)"),
-    delimiter: str = typer.Option(",", "--delimiter", help="CSV column delimiter"),
-    encoding: str = typer.Option("utf-8-sig", "--encoding", help="CSV file encoding (utf-8-sig handles BOM files like Termium)"),
+    preset: str | None = typer.Option(
+        None, "--preset",
+        help=f"Use a named preset ({', '.join(sorted(PRESETS))}). Sets column mapping and pre-processing automatically.",
+    ),
+    source: str | None = typer.Option(None, "--source", help='Dataset label (required without --preset), e.g. "custom"'),
+    src_lang: str = typer.Option("EN", "--src-lang", help="Source language code"),
+    tgt_lang: str = typer.Option("FR", "--tgt-lang", help="Target language code"),
+    source_col: str | None = typer.Option(None, "--source-col", help="CSV column for the source-language term (required without --preset)"),
+    target_col: str | None = typer.Option(None, "--target-col", help="CSV column for the target-language term (required without --preset)"),
+    subject_col: str | None = typer.Option(None, "--subject-col", help="CSV column for subject/domain (optional, ignored with --preset)"),
+    delimiter: str = typer.Option(",", "--delimiter", help="CSV column delimiter (ignored with --preset)"),
+    encoding: str = typer.Option("utf-8-sig", "--encoding", help="CSV file encoding (ignored with --preset)"),
 ) -> None:
-    """Import a terminology CSV into the local SQLite index for fast offline lookup."""
+    """Import a terminology CSV into the local SQLite index for fast offline lookup.
+
+    With --preset: column mapping and pre-processing are applied automatically.
+
+      uv run python -m glossary.cli import-terminology file.csv --preset termium --src-lang EN --tgt-lang FR
+
+    Without --preset: specify --source, --source-col, and --target-col manually.
+    """
     configure_logging()
     if not csv_path.exists():
         typer.echo(f"Error: file not found: {csv_path}", err=True)
         raise typer.Exit(code=1)
-    mapping: dict[str, str] = {"source_term": source_col, "target_term": target_col}
-    if subject_col:
-        mapping["subject"] = subject_col
-    count = _import_csv(
-        csv_path=csv_path,
-        column_mapping=mapping,
-        source_label=source,
-        source_lang=src_lang,
-        target_lang=tgt_lang,
-        delimiter=delimiter,
-        encoding=encoding,
-    )
-    typer.echo(f"Imported {count} terms from {csv_path.name} (source: {source}, {src_lang}→{tgt_lang})")
+
+    if preset:
+        if preset not in PRESETS:
+            typer.echo(f"Error: unknown preset '{preset}'. Available: {', '.join(sorted(PRESETS))}", err=True)
+            raise typer.Exit(code=1)
+        count = _import_preset(preset, csv_path, source_lang=src_lang, target_lang=tgt_lang)
+        typer.echo(f"Imported {count} terms from {csv_path.name} (preset: {preset}, {src_lang}→{tgt_lang})")
+    else:
+        if not source or not source_col or not target_col:
+            typer.echo("Error: --source, --source-col, and --target-col are required without --preset.", err=True)
+            raise typer.Exit(code=1)
+        mapping: dict[str, str] = {"source_term": source_col, "target_term": target_col}
+        if subject_col:
+            mapping["subject"] = subject_col
+        count = _import_csv(
+            csv_path=csv_path,
+            column_mapping=mapping,
+            source_label=source,
+            source_lang=src_lang,
+            target_lang=tgt_lang,
+            delimiter=delimiter,
+            encoding=encoding,
+        )
+        typer.echo(f"Imported {count} terms from {csv_path.name} (source: {source}, {src_lang}→{tgt_lang})")
 
 
 if __name__ == "__main__":
