@@ -8,6 +8,7 @@ from logging_config import configure_logging
 
 from .extractor import extract_from_dir, extract_from_file
 from .rater import rate_csv
+from .terminology import import_csv as _import_csv
 from .writer import write_csv, write_glossary
 
 app = typer.Typer(help="Extract glossary term candidates from OmegaT TMX files.")
@@ -95,6 +96,38 @@ def rate(
     log.info("rating_start", input=str(input), model=model, batch_size=batch_size)
     count = rate_csv(input, output, model=model, ollama_url=ollama_url, batch_size=batch_size)
     typer.echo(f"Rated {count} candidates. Output: {output}")
+
+
+@app.command("import-terminology")
+def import_terminology(
+    csv_path: Path = typer.Argument(..., help="CSV file to import"),
+    source: str = typer.Option(..., "--source", help='Dataset label, e.g. "termium" or "oqlf"'),
+    src_lang: str = typer.Option(..., "--src-lang", help="Source language code (e.g. EN)"),
+    tgt_lang: str = typer.Option(..., "--tgt-lang", help="Target language code (e.g. FR)"),
+    source_col: str = typer.Option(..., "--source-col", help="CSV column name for the source-language term"),
+    target_col: str = typer.Option(..., "--target-col", help="CSV column name for the target-language term"),
+    subject_col: str | None = typer.Option(None, "--subject-col", help="CSV column name for subject/domain (optional)"),
+    delimiter: str = typer.Option(",", "--delimiter", help="CSV column delimiter"),
+    encoding: str = typer.Option("utf-8-sig", "--encoding", help="CSV file encoding (utf-8-sig handles BOM files like Termium)"),
+) -> None:
+    """Import a terminology CSV into the local SQLite index for fast offline lookup."""
+    configure_logging()
+    if not csv_path.exists():
+        typer.echo(f"Error: file not found: {csv_path}", err=True)
+        raise typer.Exit(code=1)
+    mapping: dict[str, str] = {"source_term": source_col, "target_term": target_col}
+    if subject_col:
+        mapping["subject"] = subject_col
+    count = _import_csv(
+        csv_path=csv_path,
+        column_mapping=mapping,
+        source_label=source,
+        source_lang=src_lang,
+        target_lang=tgt_lang,
+        delimiter=delimiter,
+        encoding=encoding,
+    )
+    typer.echo(f"Imported {count} terms from {csv_path.name} (source: {source}, {src_lang}→{tgt_lang})")
 
 
 if __name__ == "__main__":
