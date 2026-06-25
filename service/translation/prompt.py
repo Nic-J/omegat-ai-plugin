@@ -32,8 +32,15 @@ def _parse_style_rules(content: str) -> list[str]:
 def _load_style_rules() -> list[str]:
     """Load style rules from the configured global file, one rule per line."""
     path = get_settings().style_rules_path
-    if not path or not path.exists():
-        log.debug("style_rules_not_configured", path=str(path) if path else None)
+    if not path:
+        # No global file configured at all — legitimate, stay quiet.
+        log.debug("style_rules_not_configured")
+        return []
+    if not path.exists():
+        # Configured but the file isn't where we're looking — almost always a
+        # misconfiguration (wrong path / wrong location), not an intentional "no rules".
+        # Surface it loudly instead of silently returning no rules.
+        log.warning("style_rules_file_missing", path=str(path))
         return []
     rules = _parse_style_rules(path.read_text(encoding="utf-8"))
     log.info("style_rules_loaded", path=str(path), rule_count=len(rules))

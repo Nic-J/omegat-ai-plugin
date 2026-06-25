@@ -11,6 +11,7 @@ import org.omegat.core.machinetranslators.BaseTranslate;
 import org.omegat.core.matching.NearString;
 import org.omegat.gui.glossary.GlossaryEntry;
 import org.omegat.util.Language;
+import org.omegat.util.Log;
 import org.omegat.util.Preferences;
 
 import javax.swing.JOptionPane;
@@ -71,6 +72,13 @@ public class LocalAiTranslateProvider extends BaseTranslate {
     private static final int MAX_FUZZY_MATCHES    = 3;
     private static final int CONTEXT_BEFORE_COUNT = 1;
     private static final int CONTEXT_AFTER_COUNT  = 1;
+
+    // Prefix so the plugin's lines are greppable in OmegaT's shared log file.
+    private static final String LOG_PREFIX = "AI Translation Assistant: ";
+
+    // Project roots whose style-rules outcome we've already logged, so we log once per
+    // project per session instead of once per translated segment (translate() runs per segment).
+    private static final Set<String> styleRulesLogged = ConcurrentHashMap.newKeySet();
 
     // ── Plugin lifecycle ──────────────────────────────────────────────────────
 
@@ -195,14 +203,43 @@ public class LocalAiTranslateProvider extends BaseTranslate {
 
     // ── translate() helpers ───────────────────────────────────────────────────
 
-    /** Reads {projectRoot}/ai_style_rules.txt if present; null if absent (service falls back to its global setting). */
+    /**
+     * Reads {projectRoot}/ai_style_rules.txt if present; null if absent (service falls back to its
+     * global setting). Logs the resolved path and outcome once per project per session so a missing
+     * or misplaced file is visible in OmegaT's log rather than failing silently.
+     */
     static String loadProjectStyleRules() {
+        String projectRoot;
         try {
-            String projectRoot = Core.getProject().getProjectProperties().getProjectRoot();
-            Path rulesFile = Paths.get(projectRoot, "ai_style_rules.txt");
-            if (!Files.isRegularFile(rulesFile)) return null;
-            return Files.readString(rulesFile, StandardCharsets.UTF_8);
+            projectRoot = Core.getProject().getProjectProperties().getProjectRoot();
         } catch (Exception e) {
+            // No project loaded (e.g. outside the OmegaT runtime) — nothing to read, not an error.
+            return null;
+        }
+
+        Path rulesFile = Paths.get(projectRoot, "ai_style_rules.txt");
+        boolean firstTimeForProject = styleRulesLogged.add(projectRoot);
+        try {
+            if (!Files.isRegularFile(rulesFile)) {
+                if (firstTimeForProject) {
+                    Log.log(LOG_PREFIX + "no project style rules file at " + rulesFile
+                        + " — falling back to the service's global STYLE_RULES_PATH (or none). "
+                        + "If you meant to use project style rules, place the file at exactly that path.");
+                }
+                return null;
+            }
+            String content = Files.readString(rulesFile, StandardCharsets.UTF_8);
+            if (firstTimeForProject) {
+                Log.log(LOG_PREFIX + "loaded project style rules from " + rulesFile
+                    + " (" + content.length() + " chars)");
+            }
+            return content;
+        } catch (Exception e) {
+            // File exists but couldn't be read (permissions, encoding) — a real error, surface it.
+            if (firstTimeForProject) {
+                Log.log(LOG_PREFIX + "failed to read project style rules at " + rulesFile);
+            }
+            Log.log(e);
             return null;
         }
     }

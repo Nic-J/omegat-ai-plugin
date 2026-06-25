@@ -1,7 +1,15 @@
 from unittest.mock import patch
 
+import structlog
+
+import translation.prompt as prompt_mod
+from config import Settings
 from models import ContextSegment, FuzzyMatch, GlossaryEntry, TranslateRequest
 from translation.prompt import build_prompt
+# Captured at import time: conftest's autouse fixture patches the module attribute
+# translation.prompt._load_style_rules to a stub, but this name keeps the real function
+# so the loading/logging behaviour below can be exercised directly.
+from translation.prompt import _load_style_rules as real_load_style_rules
 
 
 def make_request(**kwargs) -> TranslateRequest:
@@ -95,3 +103,35 @@ class TestBuildPrompt:
         assert "[before]" not in prompt
         assert "[after]" not in prompt
         assert "Surrounding segments" not in prompt
+
+
+class TestLoadGlobalStyleRules:
+    """The global STYLE_RULES_PATH must not fail silently when misconfigured."""
+
+    def _run(self, settings):
+        real_load_style_rules.cache_clear()  # lru_cached; reset per call
+        with patch.object(prompt_mod, "get_settings", lambda: settings):
+            with structlog.testing.capture_logs() as logs:
+                rules = real_load_style_rules()
+        return rules, logs
+
+    def test_configured_but_missing_file_warns(self, tmp_path):
+        settings = Settings(style_rules_path=tmp_path / "does_not_exist" / "style_rules.txt")
+        rules, logs = self._run(settings)
+        assert rules == []
+        assert any(
+            l["event"] == "style_rules_file_missing" and l.get("log_level") == "warning"
+            for l in logs
+        ), "a configured-but-missing style rules file must warn, not fail silently"
+
+    def test_unconfigured_does_not_warn(self):
+        rules, logs = self._run(Settings(style_rules_path=None))
+        assert rules == []
+        assert all(l["event"] != "style_rules_file_missing" for l in logs)
+
+    def test_existing_file_loads_and_logs(self, tmp_path):
+        f = tmp_path / "style_rules.txt"
+        f.write_text("# heading\nUse the median point ·.\n", encoding="utf-8")
+        rules, logs = self._run(Settings(style_rules_path=f))
+        assert rules == ["Use the median point ·."]
+        assert any(l["event"] == "style_rules_loaded" for l in logs)
