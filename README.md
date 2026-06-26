@@ -64,8 +64,7 @@ All service settings live in `service/.env` (see `service/.env.example` for the 
 | `STYLE_RULES_PATH` | _(unset)_ | Path to a global style-rules file injected into the translation prompt — copy `service/ai_style_rules.example.txt` to get started |
 | `STATE_DB_PATH` | platform user data dir | SQLite DB for glossary/summary/translation-memory state |
 | `GLOSSARY_MAX_TERMS` | `20` | Max candidate terms sent for terminology lookup |
-| `GLOSSARY_MAX_PAGE_CHARS` | `3000` | Max characters of fetched page text passed to the LLM per lookup |
-| `TERMINOLOGY_SOURCES_PATH` | `terminology_sources.toml` | TOML file for optional live HTTP terminology sources — see `service/terminology_sources.toml.example` |
+| `GLOSSARY_MAX_PAGE_CHARS` | `3000` | Max characters of source text passed to the LLM per lookup |
 
 The OmegaT plugin's service URL is configurable via the OmegaT preferences key
 `ai_translation_service_url` (default `http://localhost:8000`) — set it in
@@ -94,9 +93,8 @@ uv run python -m glossary.cli import-terminology "Construction_*.csv" --preset t
 Both sources are open data (OGL-Canada / Données Québec). The index persists in
 `state.db` — re-run the import commands to refresh when updated exports are released.
 
-To add your own live HTTP sources (IATE, Microsoft Terminology, a corporate API),
-copy `service/terminology_sources.toml.example` to `service/terminology_sources.toml`
-and enable the entries you want — no code changes needed.
+To add your own terminology (IATE export, corporate glossary, any CSV), use the
+same `import-terminology` command with a custom `--column-map` instead of `--preset`.
 
 ### Style rules: global default and per-project override
 
@@ -177,7 +175,7 @@ content is sent in the request payload, not as filesystem paths.
 
 ## Limitations
 
-- Built-in terminology sources (Termium, OQLF) are Canadian EN↔FR-focused — add your own via `terminology_sources.toml` for other languages
+- Built-in terminology presets (Termium, OQLF) are Canadian EN↔FR-focused — import your own CSV for other languages
 
 ## Contributing
 
