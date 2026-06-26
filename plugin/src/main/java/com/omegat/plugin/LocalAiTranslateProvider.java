@@ -200,11 +200,21 @@ public class LocalAiTranslateProvider extends BaseTranslate {
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            Log.log(LOG_PREFIX + "fuzzy-match reflection failed — no fuzzy matches will be sent: " + e.getMessage());
+        }
 
         String currentFilePath = currentEntry != null ? currentEntry.getKey().file : null;
         String styleRules = loadProjectStyleRules();
         String projectId = currentProjectId();
+
+        // Per-segment intentionally — the payload summary is what you need when diagnosing
+        // "why weren't style rules / glossary / fuzzy matches applied to this segment?"
+        Log.log(LOG_PREFIX + "translate request: glossary=" + glossaryEntries.size() + " terms, "
+            + "fuzzy=" + matchesToSend.size() + " matches, "
+            + "context_before=" + contextBefore.size() + ", context_after=" + contextAfter.size() + ", "
+            + "style_rules=" + (styleRules != null ? "yes (" + styleRules.length() + " chars)" : "no") + ", "
+            + "project_id=" + (projectId != null ? "set" : "none"));
 
         String requestBody = buildTranslateJson(
             text, sLang.getLanguage(), tLang.getLanguage(),
@@ -665,7 +675,9 @@ public class LocalAiTranslateProvider extends BaseTranslate {
             try {
                 String body = buildGlossaryJson(sourceStrings, srcLang, tgtLang, filePath, null);
                 httpPost(GLOSSARY_DEFER_URL, body, 5_000);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                Log.log(LOG_PREFIX + "glossary defer failed (non-critical): " + e.getMessage());
+            }
         }
 
         /** Requests a file summary from the service (generates and caches if absent). Silent — no popup. */
@@ -678,7 +690,9 @@ public class LocalAiTranslateProvider extends BaseTranslate {
                 String tgtLang = Core.getProject().getProjectProperties().getTargetLanguage().getLanguage();
                 String body = buildSummaryRequestJson(filePath, sourceStrings, srcLang, tgtLang);
                 httpPost(FILE_SUMMARY_URL, body, 60_000);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                Log.log(LOG_PREFIX + "file-summary request failed for " + filePath + ": " + e.getMessage());
+            }
         }
 
         private static String buildSummaryRequestJson(String filePath, List<String> sourceStrings,

@@ -37,9 +37,22 @@ async def translate(
         )
 
     project_id = request.project_id or ""
+    style_rules = resolve_style_rules(request)
+    style_rules_source = (
+        "request" if request.style_rules is not None
+        else "global" if style_rules
+        else "none"
+    )
+    log.info("translate_request",
+             source_lang=request.source_lang,
+             target_lang=request.target_lang,
+             glossary_count=len(request.glossary or []),
+             fuzzy_count=len(request.fuzzy_matches or []),
+             style_rules_source=style_rules_source,
+             style_rules_count=len(style_rules))
     cache_key = tm_state.compute_key(
         request.source_text, request.source_lang, request.target_lang,
-        request.glossary, resolve_style_rules(request), settings.ai_model,
+        request.glossary, style_rules, settings.ai_model,
     )
     cached = tm_state.get(cache_key, project_id=project_id, db_path=settings.state_db_path)
 
