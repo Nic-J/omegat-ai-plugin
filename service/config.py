@@ -42,12 +42,6 @@ class Settings(BaseSettings):
     # correctly regardless of the directory it's launched from.
     state_db_path: Path | None = _DEFAULT_STATE_DB_PATH
 
-    # TOML file listing terminology lookup sources for the glossary agent (see
-    # terminology_sources.toml.example). Resolved relative to the CWD the service
-    # is started from (start.sh keeps that at service/, next to .env). Falls back
-    # to the built-in Termium + OQLF defaults if the file isn't found.
-    terminology_sources_path: Path | None = Path("terminology_sources.toml")
-
     # ── Glossary agent tuning ─────────────────────────────────────────────────
     # Maximum number of candidate terms sent to terminology sources for lookup.
     # Increase for broader coverage; decrease to reduce API calls and latency.
