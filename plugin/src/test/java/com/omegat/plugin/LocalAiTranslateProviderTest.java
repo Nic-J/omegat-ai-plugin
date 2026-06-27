@@ -71,6 +71,39 @@ class LocalAiTranslateProviderTest {
             LocalAiTranslateProvider.extractStringField("{\"text\":\"caf\\u00e9\"}", "text"));
     }
 
+    // ── extractStringArray ────────────────────────────────────────────────────
+
+    @Test
+    void extractStringArray_basic() {
+        List<String> result = LocalAiTranslateProvider.extractStringArray(
+            "{\"qa_findings\":[\"Used approved term.\",\"Applied formal register.\"]}", "qa_findings");
+        assertEquals(2, result.size());
+        assertEquals("Used approved term.", result.get(0));
+        assertEquals("Applied formal register.", result.get(1));
+    }
+
+    @Test
+    void extractStringArray_empty() {
+        List<String> result = LocalAiTranslateProvider.extractStringArray(
+            "{\"qa_findings\":[]}", "qa_findings");
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void extractStringArray_absent() {
+        List<String> result = LocalAiTranslateProvider.extractStringArray(
+            "{\"translated_text\":\"Bonjour\"}", "qa_findings");
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void extractStringArray_withEscapedQuotes() {
+        List<String> result = LocalAiTranslateProvider.extractStringArray(
+            "{\"qa_findings\":[\"Use \\\"Enregistrer\\\" not \\\"Sauvegarder\\\".\"]}", "qa_findings");
+        assertEquals(1, result.size());
+        assertEquals("Use \"Enregistrer\" not \"Sauvegarder\".", result.get(0));
+    }
+
     // ── extractBooleanField ───────────────────────────────────────────────────
 
     @Test

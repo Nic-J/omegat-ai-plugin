@@ -66,8 +66,7 @@ class TestQAInTranslateFlow:
         assert data["qa_findings"] == []
 
     def test_qa_disabled_skips_review(self, tmp_path):
-        # Default settings → qa_enabled is False.
-        app.dependency_overrides[get_settings] = lambda: Settings(state_db_path=tmp_path / "state.db")
+        app.dependency_overrides[get_settings] = lambda: Settings(state_db_path=tmp_path / "state.db", qa_enabled=False)
         with patch.object(qa, "review", new=AsyncMock()) as mock_review:
             resp = client.post("/translate", json={
                 "source_text": "Save", "source_lang": "EN", "target_lang": "FR-CA",

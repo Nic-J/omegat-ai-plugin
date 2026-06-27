@@ -22,7 +22,9 @@ def isolate_state_db(tmp_path):
     Tests that need a specific Settings can still override get_settings
     themselves; dependency_overrides simply gets reassigned.
     """
-    settings = Settings(state_db_path=tmp_path / "state.db")
+    # Explicitly pin feature toggles so the test environment is isolated from
+    # any values set in the real .env file (pydantic-settings reads .env by default).
+    settings = Settings(state_db_path=tmp_path / "state.db", qa_enabled=False)
     app.dependency_overrides[get_settings] = lambda: settings
     yield
     app.dependency_overrides.clear()

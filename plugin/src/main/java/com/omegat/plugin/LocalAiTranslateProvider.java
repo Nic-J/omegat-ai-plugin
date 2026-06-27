@@ -225,6 +225,10 @@ public class LocalAiTranslateProvider extends BaseTranslate {
         String response = httpPost(SERVICE_URL, requestBody, 30_000);
         String translated = extractStringField(response, "translated_text");
         if (translated == null) throw new Exception("'translated_text' not found in service response");
+        List<String> qaFindings = extractStringArray(response, "qa_findings");
+        for (String finding : qaFindings) {
+            Log.log(LOG_PREFIX + "QA correction: " + finding);
+        }
         return translated;
     }
 
@@ -579,6 +583,47 @@ public class LocalAiTranslateProvider extends BaseTranslate {
             i++;
         }
         return result.toString();
+    }
+
+    static List<String> extractStringArray(String json, String fieldName) {
+        List<String> result = new ArrayList<>();
+        String marker = "\"" + fieldName + "\":[";
+        int start = json.indexOf(marker);
+        if (start < 0) return result;
+        int i = start + marker.length();
+        while (i < json.length()) {
+            char c = json.charAt(i);
+            if (c == ']') break;
+            if (c == '"') {
+                i++;
+                StringBuilder sb = new StringBuilder();
+                while (i < json.length()) {
+                    char sc = json.charAt(i);
+                    if (sc == '"') { i++; break; }
+                    if (sc == '\\' && i + 1 < json.length()) {
+                        char esc = json.charAt(i + 1);
+                        switch (esc) {
+                            case '"':  sb.append('"');  i += 2; continue;
+                            case '\\': sb.append('\\'); i += 2; continue;
+                            case 'n':  sb.append('\n'); i += 2; continue;
+                            case 'r':  sb.append('\r'); i += 2; continue;
+                            case 't':  sb.append('\t'); i += 2; continue;
+                            case 'u':
+                                if (i + 5 < json.length()) {
+                                    sb.append((char) Integer.parseInt(json.substring(i + 2, i + 6), 16));
+                                    i += 6; continue;
+                                }
+                        }
+                    }
+                    sb.append(sc);
+                    i++;
+                }
+                result.add(sb.toString());
+            } else {
+                i++;
+            }
+        }
+        return result;
     }
 
     static boolean extractBooleanField(String json, String fieldName) {
