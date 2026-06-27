@@ -36,6 +36,7 @@ async def translate(
         glossary_applied=bool(request.glossary),
         fuzzy_match_used=bool(request.fuzzy_matches),
         from_cache=result.from_cache,
+        qa_findings=result.qa_findings,
     )
     log.info("translate_response", file_path=request.file_path, **response.model_dump())
     return response

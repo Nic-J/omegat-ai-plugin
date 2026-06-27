@@ -6,7 +6,7 @@ the HTTP stack, and so a future batch endpoint can reuse it segment-by-segment.
 The route handler stays transport-only: receive request → call translate_segment
 → shape response.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import structlog
 
@@ -15,6 +15,7 @@ from models import TranslateRequest
 from summary import state as summary_state
 from tm import state as tm_state
 from translation import agent as translator
+from translation import qa
 from translation.prompt import resolve_style_rules
 
 log = structlog.get_logger()
@@ -22,10 +23,10 @@ log = structlog.get_logger()
 
 @dataclass
 class TranslateResult:
-    """Outcome of translating one segment. Grows as the pipeline gains steps
-    (e.g. QA findings in OMP-023); the route maps it onto TranslateResponse."""
+    """Outcome of translating one segment. The route maps it onto TranslateResponse."""
     translated_text: str
     from_cache: bool
+    qa_findings: list[str] = field(default_factory=list)
 
 
 async def translate_segment(request: TranslateRequest, settings: Settings) -> TranslateResult:
@@ -66,10 +67,25 @@ async def translate_segment(request: TranslateRequest, settings: Settings) -> Tr
 
     translated_text = await translator.translate(request, file_summary=file_summary)
 
+    # QA self-critique — verify glossary/style adherence on the fresh translation,
+    # before caching, so the corrected text is what gets stored. Skip when there's
+    # nothing to check (no glossary terms and no style rules).
+    qa_findings: list[str] = []
+    if settings.qa_enabled and (request.glossary or style_rules):
+        review = await qa.review(request, translated_text, style_rules)
+        if review.findings:
+            log.info("qa_corrections", file_path=request.file_path,
+                     original=translated_text, corrected=review.corrected_text,
+                     findings=review.findings)
+            translated_text = review.corrected_text
+            qa_findings = review.findings
+        else:
+            log.info("qa_clean", file_path=request.file_path)
+
     if settings.tm_cache_enabled:
         tm_state.save(
             cache_key, request.source_text, request.source_lang, request.target_lang,
             translated_text, settings.ai_model, project_id=project_id, db_path=settings.state_db_path,
         )
 
-    return TranslateResult(translated_text=translated_text, from_cache=False)
+    return TranslateResult(translated_text=translated_text, from_cache=False, qa_findings=qa_findings)

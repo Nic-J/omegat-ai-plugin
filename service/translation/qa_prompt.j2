@@ -1,0 +1,27 @@
+You are a bilingual {{ source_lang }}→{{ target_lang }} translation reviewer.
+Check the candidate translation against the requirements below and fix only genuine violations.
+
+Source ({{ source_lang }}):
+{{ source_text }}
+
+Candidate translation ({{ target_lang }}):
+{{ translation }}
+
+{% if glossary %}
+Required terminology — the target text must use the approved translation for each source term:
+{% for entry in glossary %}
+- "{{ entry.source }}" → "{{ entry.target }}"{% if entry.comment %} ({{ entry.comment }}){% endif %}
+{% endfor %}
+
+{% endif %}
+{% if style_rules %}
+Style rules the target text must follow:
+{% for rule in style_rules %}
+- {{ rule }}
+{% endfor %}
+
+{% endif %}
+Instructions:
+- If the candidate already satisfies every requirement, return it unchanged with an empty findings list.
+- Otherwise return corrected_text with the minimal edits needed to satisfy the requirements, and list each fix in findings — one short sentence per fix, naming the term or rule it addresses.
+- Do not change meaning, retranslate from scratch, or "improve" the text beyond the listed requirements.

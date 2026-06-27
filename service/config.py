@@ -49,6 +49,18 @@ class Settings(BaseSettings):
     # LLM call for every segment.
     tm_cache_enabled: bool = True
 
+    # QA self-critique pass: a second LLM call that verifies each new translation
+    # against the glossary + style rules and auto-corrects violations. Off by
+    # default — it doubles the per-segment cost on cache misses. Skipped when a
+    # segment has neither glossary terms nor style rules (nothing to check).
+    qa_enabled: bool = False
+
+    # ── QA model selection ────────────────────────────────────────────────────
+    # Model used for the QA self-critique pass. Falls back to ai_model if empty,
+    # mirroring glossary_model — set a stronger model here while keeping ai_model
+    # on local Ollama.
+    qa_model: str = ""
+
     # ── Glossary agent tuning ─────────────────────────────────────────────────
     # Maximum number of candidate terms sent to terminology sources for lookup.
     # Increase for broader coverage; decrease to reduce API calls and latency.

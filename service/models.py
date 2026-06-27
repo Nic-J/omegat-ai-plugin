@@ -42,6 +42,7 @@ class TranslateResponse(BaseModel):
     glossary_applied: bool
     fuzzy_match_used: bool
     from_cache: bool = False
+    qa_findings: list[str] = []  # fixes the QA pass made; empty when QA off, clean, or cache hit
 
 
 class GlossaryPrepRequest(BaseModel):
