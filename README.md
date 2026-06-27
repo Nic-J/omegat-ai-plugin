@@ -9,6 +9,7 @@ via Anthropic/Google APIs.
 
 - AI translation with glossary enforcement, fuzzy-match context, and surrounding-segment context
 - Server-side translation memory cache — repeat segments return instantly with no extra LLM call
+- Optional QA self-critique pass — verifies each translation against the glossary and style rules, auto-correcting violations
 - Automatic document summarization, injected into each translation request for better context
 - Glossary extraction: LLM identifies candidate terms from each file; authoritative EN↔FR translations looked up from a local terminology index (import Termium/OQLF open-data once via CLI)
 - Works with any model via Ollama (local, free) or Anthropic/Google APIs (cloud)
@@ -64,6 +65,8 @@ All service settings live in `service/.env` (see `service/.env.example` for the 
 | `STYLE_RULES_PATH` | _(unset)_ | Path to a global style-rules file injected into the translation prompt — copy `service/ai_style_rules.example.txt` to get started |
 | `STATE_DB_PATH` | platform user data dir | SQLite DB for glossary/summary/translation-memory state |
 | `TM_CACHE_ENABLED` | `true` | Server-side translation memory cache; set `false` to force a fresh LLM call per segment (gates both cache read and write) |
+| `QA_ENABLED` | `false` | Opt-in QA self-critique pass that checks each new translation against glossary + style rules and auto-corrects violations |
+| `QA_MODEL` | _(falls back to `AI_MODEL`)_ | Model used for the QA pass — benefits from a stronger model |
 | `GLOSSARY_MAX_TERMS` | `20` | Max candidate terms sent for terminology lookup |
 | `GLOSSARY_MAX_PAGE_CHARS` | `3000` | Max characters of source text passed to the LLM per lookup |
 
@@ -129,6 +132,20 @@ changed key just orphans the old row, which is fine at single-user scale. The
 `/translate` response includes `from_cache: true` when served from the cache.
 Set `TM_CACHE_ENABLED=false` to turn the cache off entirely (every segment then
 triggers a fresh LLM call).
+
+## QA self-critique pass
+
+With `QA_ENABLED=true`, each *new* translation gets a second LLM pass that checks
+it against the approved glossary and the resolved style rules, then returns a
+minimally-corrected version — so the suggestion you see already honours your
+terminology and style. It runs only on a cache miss and **before** the result is
+cached, so the cost is paid once per genuinely new segment and never on a repeat.
+Segments with neither glossary terms nor style rules are skipped (nothing to
+check). Use `QA_MODEL` to run the pass on a stronger model than `AI_MODEL`.
+
+Corrections are auditable: each fix is logged service-side (original → corrected,
+with the reason) and returned in the `/translate` response's `qa_findings` list.
+QA is off by default because it doubles the per-segment LLM cost on cache misses.
 
 ## Adding your own research tool
 
