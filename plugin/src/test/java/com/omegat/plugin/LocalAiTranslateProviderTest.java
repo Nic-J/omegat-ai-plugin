@@ -222,6 +222,34 @@ class LocalAiTranslateProviderTest {
         assertEquals(0, LocalAiTranslateProvider.GlossaryExtractionListener.parseSuggestions(json).size());
     }
 
+    // ── buildBatchJson ────────────────────────────────────────────────────────
+
+    @Test
+    void buildBatchJson_wrapsSegmentsIntoArray() {
+        List<String> segments = Arrays.asList(
+            "{\"source_text\":\"Hello\",\"source_lang\":\"EN\",\"target_lang\":\"FR\"}",
+            "{\"source_text\":\"Bye\",\"source_lang\":\"EN\",\"target_lang\":\"FR\"}"
+        );
+        String json = LocalAiTranslateProvider.buildBatchJson(segments);
+        assertTrue(json.startsWith("{\"segments\":["));
+        assertTrue(json.contains("\"Hello\""));
+        assertTrue(json.contains("\"Bye\""));
+        assertTrue(json.endsWith("]}"));
+    }
+
+    @Test
+    void buildBatchJson_emptyList() {
+        String json = LocalAiTranslateProvider.buildBatchJson(Collections.emptyList());
+        assertEquals("{\"segments\":[]}", json);
+    }
+
+    // ── countUntranslatedEntries (outside runtime) ────────────────────────────
+
+    @Test
+    void countUntranslatedEntries_returnsZeroOutsideOmegatRuntime() {
+        assertEquals(0, LocalAiTranslateProvider.countUntranslatedEntries("any/file.docx"));
+    }
+
     // ── findNearMissStyleRulesFile ─────────────────────────────────────────────
     // Pure filesystem logic — no OmegaT runtime needed.
 

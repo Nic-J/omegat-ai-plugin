@@ -451,6 +451,92 @@ public class LocalAiTranslateProvider extends BaseTranslate {
             .collect(Collectors.joining("|"));
     }
 
+    // ── Batch context assembly (OMP-026) ──────────────────────────────────────
+
+    /**
+     * Returns the number of untranslated entries in the given file.
+     * Returns 0 outside the OmegaT runtime or when all entries are already translated.
+     */
+    static int countUntranslatedEntries(String filePath) {
+        try {
+            int count = 0;
+            for (IProject.FileInfo fi : Core.getProject().getProjectFiles()) {
+                if (fi.filePath.equals(filePath)) {
+                    for (SourceTextEntry ste : fi.entries) {
+                        try {
+                            TMXEntry info = Core.getProject().getTranslationInfo(ste);
+                            if (info == null || !info.isTranslated()) count++;
+                        } catch (Exception ignored) {}
+                    }
+                    break;
+                }
+            }
+            return count;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Builds a /batch-translate JSON body for all untranslated segments in the given file.
+     * Each segment includes glossary matches and context neighbors; fuzzy matches are
+     * omitted (OmegaT's matcher is async and tied to active-segment navigation).
+     * Returns null when the project is not loaded or no untranslated segments exist.
+     */
+    static String buildBatchRequestJson(String filePath, String srcLang, String tgtLang,
+                                         String styleRules, String projectId) {
+        List<SourceTextEntry> allEntries = new ArrayList<>();
+        try {
+            for (IProject.FileInfo fi : Core.getProject().getProjectFiles()) {
+                if (fi.filePath.equals(filePath)) {
+                    allEntries.addAll(fi.entries);
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        if (allEntries.isEmpty()) return null;
+
+        List<String> segmentJsons = new ArrayList<>();
+        for (int i = 0; i < allEntries.size(); i++) {
+            SourceTextEntry entry = allEntries.get(i);
+            try {
+                TMXEntry info = Core.getProject().getTranslationInfo(entry);
+                if (info != null && info.isTranslated()) continue;
+            } catch (Exception ignored) {}
+
+            List<String[]> ctxBefore = new ArrayList<>();
+            List<String[]> ctxAfter  = new ArrayList<>();
+            if (i > 0) ctxBefore.add(contextSegment(allEntries.get(i - 1)));
+            if (i < allEntries.size() - 1) ctxAfter.add(contextSegment(allEntries.get(i + 1)));
+
+            List<GlossaryEntry> glossary = Collections.emptyList();
+            try {
+                glossary = Core.getGlossaryManager().searchSourceMatches(entry);
+            } catch (Exception ignored) {}
+
+            segmentJsons.add(buildTranslateJson(
+                entry.getSrcText(), srcLang, tgtLang, filePath,
+                glossary, Collections.emptyList(),
+                ctxBefore, ctxAfter, styleRules, projectId
+            ));
+        }
+        if (segmentJsons.isEmpty()) return null;
+        return buildBatchJson(segmentJsons);
+    }
+
+    /** Wraps pre-built segment JSON strings into a /batch-translate request body. */
+    static String buildBatchJson(List<String> segmentJsons) {
+        StringBuilder sb = new StringBuilder("{\"segments\":[");
+        for (int i = 0; i < segmentJsons.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(segmentJsons.get(i));
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
     // ── JSON serialisation ────────────────────────────────────────────────────
 
     // Package-visible (not private) so unit tests can assert the request JSON it builds,
