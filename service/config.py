@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     # correctly regardless of the directory it's launched from.
     state_db_path: Path | None = _DEFAULT_STATE_DB_PATH
 
+    # ── Feature toggles ───────────────────────────────────────────────────────
+    # Server-side translation memory cache. One flag gates both read and write:
+    # disabling only one is incoherent (read-only serves stale entries forever;
+    # write-only never produces a hit). On by default — turn off to force a fresh
+    # LLM call for every segment.
+    tm_cache_enabled: bool = True
+
     # ── Glossary agent tuning ─────────────────────────────────────────────────
     # Maximum number of candidate terms sent to terminology sources for lookup.
     # Increase for broader coverage; decrease to reduce API calls and latency.

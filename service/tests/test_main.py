@@ -3,6 +3,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import translation.agent as translation_agent
+from config import Settings, get_settings
 from main import app
 
 client = TestClient(app)
@@ -113,6 +114,32 @@ def test_translate_passes_style_rules_into_prompt():
     assert response.status_code == 200
     assert "median point" in captured["prompt"]
     assert "directeur·trice·s" in captured["prompt"]
+
+
+def test_tm_cache_serves_second_identical_request(tmp_path):
+    """With the cache on (default), the second identical request is served from cache."""
+    app.dependency_overrides[get_settings] = lambda: Settings(state_db_path=tmp_path / "state.db")
+    body = {"source_text": "Repeat me", "source_lang": "EN", "target_lang": "FR-CA"}
+
+    first = client.post("/translate", json=body)
+    second = client.post("/translate", json=body)
+
+    assert first.json()["from_cache"] is False
+    assert second.json()["from_cache"] is True
+
+
+def test_tm_cache_disabled_never_serves_cache(tmp_path):
+    """With tm_cache_enabled=False, even a repeated request always hits the LLM."""
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        state_db_path=tmp_path / "state.db", tm_cache_enabled=False
+    )
+    body = {"source_text": "Repeat me", "source_lang": "EN", "target_lang": "FR-CA"}
+
+    first = client.post("/translate", json=body)
+    second = client.post("/translate", json=body)
+
+    assert first.json()["from_cache"] is False
+    assert second.json()["from_cache"] is False
 
 
 def test_translate_fuzzy_match_with_full_fields():
