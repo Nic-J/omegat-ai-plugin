@@ -143,9 +143,9 @@ cached, so the cost is paid once per genuinely new segment and never on a repeat
 Segments with neither glossary terms nor style rules are skipped (nothing to
 check). Use `QA_MODEL` to run the pass on a stronger model than `AI_MODEL`.
 
-Corrections are auditable: each fix is logged service-side (original → corrected,
-with the reason) and returned in the `/translate` response's `qa_findings` list.
-QA is off by default because it doubles the per-segment LLM cost on cache misses.
+Corrections are auditable: each fix is logged to both the service log and OmegaT's
+own log (grep for `QA correction:` in OmegaT's log file). QA is off by default
+because it doubles the per-segment LLM cost on cache misses.
 
 ## Adding your own research tool
 
