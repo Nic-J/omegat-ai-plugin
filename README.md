@@ -9,6 +9,7 @@ via Anthropic/Google APIs.
 
 - AI translation with glossary enforcement, fuzzy-match context, and surrounding-segment context
 - Server-side translation memory cache — repeat segments return instantly with no extra LLM call
+- Batch pre-translation — on file open, a popup offers to pre-translate all untranslated segments in the background; each segment returns instantly from cache when you reach it
 - Optional QA self-critique pass — verifies each translation against the glossary and style rules, auto-correcting violations
 - Automatic document summarization, injected into each translation request for better context
 - Glossary extraction: LLM identifies candidate terms from each file; authoritative EN↔FR translations looked up from a local terminology index (import Termium/OQLF open-data once via CLI)
@@ -147,6 +148,22 @@ Corrections are auditable: each fix is logged to both the service log and OmegaT
 own log (grep for `QA correction:` in OmegaT's log file). QA is off by default
 because it doubles the per-segment LLM cost on cache misses.
 
+## Batch pre-translation
+
+When you open a file in OmegaT, a popup offers to pre-translate all untranslated segments in the background:
+
+> Pre-translate N untranslated segments in "filename.docx"?  
+> Results will be cached for instant retrieval when you reach each segment.
+
+Clicking **Yes** sends the whole file to the service in a single request. Each segment goes through the same orchestrator as the live MT pane — glossary terms and project style rules are applied, and the QA pass runs if `QA_ENABLED=true`. Results land in the TM cache; when you navigate to a pre-translated segment, the MT pane responds instantly with no LLM call.
+
+Key details:
+- **Non-destructive** — nothing is inserted into OmegaT's translation fields. Results only land in the server-side TM cache.
+- **Fuzzy matches not sent in the batch** — OmegaT's matcher is async and tied to active-segment navigation. The cache key excludes fuzzy matches anyway, so the cached result is served on the live request regardless.
+- **Once per file per session** — the popup appears the first time a file is opened in an OmegaT session. Clicking No skips it until the next session.
+- **Progress** — logged to OmegaT's log (`AI Translation Assistant: batch pre-translate...`). A completion dialog shows how many segments were cached and how many were already in cache.
+- **Failure is silent** — if the service is unreachable or an individual segment fails, the error is logged and live translation continues normally.
+
 ## Adding your own research tool
 
 The glossary agent (`service/glossary/agent.py`) is structured so adding your
@@ -179,7 +196,7 @@ Tavily, or anything with an HTTP endpoint — fetch, return text, reference in p
 
 1. In OmegaT: **Options → Machine Translate** → enable "AI Translation Assistant"
 2. Translate a segment as usual — the plugin calls the local service for each one
-3. When you open a file, a popup offers to extract glossary candidates from the active translation memory
+3. When you open a file, two popups may appear: one offers to extract glossary candidates from the file's content, another offers to pre-translate all untranslated segments in the background (results are cached for instant retrieval)
 
 ## Architecture
 
