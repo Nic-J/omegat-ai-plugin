@@ -142,6 +142,79 @@ def test_tm_cache_disabled_never_serves_cache(tmp_path):
     assert second.json()["from_cache"] is False
 
 
+def test_batch_translate_returns_all_results():
+    """Batch endpoint processes all segments and returns one result per segment."""
+    response = client.post(
+        "/batch-translate",
+        json={
+            "segments": [
+                {"source_text": "Hello", "source_lang": "EN", "target_lang": "FR-CA"},
+                {"source_text": "Goodbye", "source_lang": "EN", "target_lang": "FR-CA"},
+            ]
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["completed"] == 2
+    assert data["failed"] == 0
+    assert len(data["results"]) == 2
+    assert data["results"][0]["source_text"] == "Hello"
+    assert data["results"][0]["translated_text"] == "(mocked ai translation)"
+    assert data["results"][0]["error"] is None
+    assert data["results"][1]["source_text"] == "Goodbye"
+
+
+def test_batch_translate_isolates_per_segment_errors(tmp_path):
+    """A failure in one segment does not abort the batch; other segments succeed."""
+    call_count = {"n": 0}
+    original_translate = translation_agent.translate
+
+    async def flaky_translate(request, file_summary=None):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise RuntimeError("simulated LLM error")
+        return await original_translate(request, file_summary=file_summary)
+
+    with patch.object(translation_agent, "translate", side_effect=flaky_translate):
+        response = client.post(
+            "/batch-translate",
+            json={
+                "segments": [
+                    {"source_text": "Fail me", "source_lang": "EN", "target_lang": "FR-CA"},
+                    {"source_text": "Succeed me", "source_lang": "EN", "target_lang": "FR-CA"},
+                ]
+            },
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["failed"] == 1
+    assert data["completed"] == 1
+    assert data["results"][0]["error"] is not None
+    assert data["results"][1]["translated_text"] is not None
+    assert data["results"][1]["error"] is None
+
+
+def test_batch_translate_warms_tm_cache(tmp_path):
+    """Batch translations are stored in the TM cache; a subsequent single /translate hits it."""
+    app.dependency_overrides[get_settings] = lambda: Settings(state_db_path=tmp_path / "state.db")
+    batch_response = client.post(
+        "/batch-translate",
+        json={
+            "segments": [
+                {"source_text": "Cache me via batch", "source_lang": "EN", "target_lang": "FR-CA"},
+            ]
+        },
+    )
+    assert batch_response.json()["results"][0]["from_cache"] is False
+
+    single_response = client.post(
+        "/translate",
+        json={"source_text": "Cache me via batch", "source_lang": "EN", "target_lang": "FR-CA"},
+    )
+    assert single_response.json()["from_cache"] is True
+
+
 def test_translate_fuzzy_match_with_full_fields():
     response = client.post(
         "/translate",

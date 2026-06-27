@@ -8,6 +8,9 @@ from summary import agent as summary_agent
 from summary import state as summary_state
 from translation.pipeline import translate_segment
 from models import (
+    BatchSegmentResult,
+    BatchTranslateRequest,
+    BatchTranslateResponse,
     FileSummaryRequest,
     FileSummaryResponse,
     GlossaryDeferResponse,
@@ -40,6 +43,32 @@ async def translate(
     )
     log.info("translate_response", file_path=request.file_path, **response.model_dump())
     return response
+
+
+@router.post("/batch-translate", response_model=BatchTranslateResponse)
+async def batch_translate(
+    request: BatchTranslateRequest,
+    settings: Settings = Depends(get_settings),
+) -> BatchTranslateResponse:
+    results: list[BatchSegmentResult] = []
+    failed = 0
+    log.info("batch_translate_start", segment_count=len(request.segments))
+    for seg in request.segments:
+        try:
+            result = await translate_segment(seg, settings)
+            results.append(BatchSegmentResult(
+                source_text=seg.source_text,
+                translated_text=result.translated_text,
+                from_cache=result.from_cache,
+                qa_findings=result.qa_findings,
+            ))
+        except Exception as exc:
+            log.warning("batch_translate_segment_error", source_text=seg.source_text[:80], error=str(exc))
+            results.append(BatchSegmentResult(source_text=seg.source_text, error=str(exc)))
+            failed += 1
+    completed = len(results) - failed
+    log.info("batch_translate_complete", completed=completed, failed=failed)
+    return BatchTranslateResponse(results=results, completed=completed, failed=failed)
 
 
 @router.post("/file-summary/generate", response_model=FileSummaryResponse)

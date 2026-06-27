@@ -85,3 +85,21 @@ class FileSummaryRequest(BaseModel):
 class FileSummaryResponse(BaseModel):
     summary: str
     from_cache: bool = False
+
+
+class BatchTranslateRequest(BaseModel):
+    segments: list[TranslateRequest]
+
+
+class BatchSegmentResult(BaseModel):
+    source_text: str
+    translated_text: str | None = None
+    from_cache: bool = False
+    qa_findings: list[str] = []
+    error: str | None = None  # set when this segment failed; others in the batch still processed
+
+
+class BatchTranslateResponse(BaseModel):
+    results: list[BatchSegmentResult]
+    completed: int
+    failed: int
