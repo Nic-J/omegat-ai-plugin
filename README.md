@@ -63,6 +63,7 @@ All service settings live in `service/.env` (see `service/.env.example` for the 
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama instance |
 | `STYLE_RULES_PATH` | _(unset)_ | Path to a global style-rules file injected into the translation prompt — copy `service/ai_style_rules.example.txt` to get started |
 | `STATE_DB_PATH` | platform user data dir | SQLite DB for glossary/summary/translation-memory state |
+| `TM_CACHE_ENABLED` | `true` | Server-side translation memory cache; set `false` to force a fresh LLM call per segment (gates both cache read and write) |
 | `GLOSSARY_MAX_TERMS` | `20` | Max candidate terms sent for terminology lookup |
 | `GLOSSARY_MAX_PAGE_CHARS` | `3000` | Max characters of source text passed to the LLM per lookup |
 
@@ -126,6 +127,8 @@ from the key — same source text in different context returns one cached
 translation, matching how OmegaT's own TM behaves. There's no eviction; a
 changed key just orphans the old row, which is fine at single-user scale. The
 `/translate` response includes `from_cache: true` when served from the cache.
+Set `TM_CACHE_ENABLED=false` to turn the cache off entirely (every segment then
+triggers a fresh LLM call).
 
 ## Adding your own research tool
 
