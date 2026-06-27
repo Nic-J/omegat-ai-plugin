@@ -222,6 +222,37 @@ class LocalAiTranslateProviderTest {
         assertEquals(0, LocalAiTranslateProvider.GlossaryExtractionListener.parseSuggestions(json).size());
     }
 
+    // ── extractIntField ───────────────────────────────────────────────────────
+
+    @Test
+    void extractIntField_basic() {
+        assertEquals(5, LocalAiTranslateProvider.extractIntField("{\"completed\":5,\"failed\":0}", "completed"));
+        assertEquals(0, LocalAiTranslateProvider.extractIntField("{\"completed\":5,\"failed\":0}", "failed"));
+    }
+
+    @Test
+    void extractIntField_absent() {
+        assertEquals(0, LocalAiTranslateProvider.extractIntField("{}", "completed"));
+    }
+
+    // ── countFromCacheInBatchResponse ─────────────────────────────────────────
+
+    @Test
+    void countFromCacheInBatchResponse_countsTrue() {
+        String json = "{\"results\":["
+            + "{\"source_text\":\"A\",\"from_cache\":true},"
+            + "{\"source_text\":\"B\",\"from_cache\":false},"
+            + "{\"source_text\":\"C\",\"from_cache\":true}"
+            + "],\"completed\":3,\"failed\":0}";
+        assertEquals(2, LocalAiTranslateProvider.countFromCacheInBatchResponse(json));
+    }
+
+    @Test
+    void countFromCacheInBatchResponse_noneFromCache() {
+        String json = "{\"results\":[{\"from_cache\":false}],\"completed\":1,\"failed\":0}";
+        assertEquals(0, LocalAiTranslateProvider.countFromCacheInBatchResponse(json));
+    }
+
     // ── buildBatchJson ────────────────────────────────────────────────────────
 
     @Test

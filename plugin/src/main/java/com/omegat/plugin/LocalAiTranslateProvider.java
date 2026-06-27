@@ -69,6 +69,7 @@ public class LocalAiTranslateProvider extends BaseTranslate {
     private static final String GLOSSARY_STATUS_URL  = SERVICE_BASE_URL + "/glossary/status";
     private static final String GLOSSARY_DEFER_URL   = SERVICE_BASE_URL + "/glossary/defer";
     private static final String FILE_SUMMARY_URL     = SERVICE_BASE_URL + "/file-summary/generate";
+    private static final String BATCH_TRANSLATE_URL  = SERVICE_BASE_URL + "/batch-translate";
 
     private static final int MAX_FUZZY_MATCHES    = 3;
     private static final int CONTEXT_BEFORE_COUNT = 1;
@@ -712,6 +713,24 @@ public class LocalAiTranslateProvider extends BaseTranslate {
         return result;
     }
 
+    static int extractIntField(String json, String fieldName) {
+        String marker = "\"" + fieldName + "\":";
+        int start = json.indexOf(marker);
+        if (start < 0) return 0;
+        int i = start + marker.length();
+        StringBuilder num = new StringBuilder();
+        while (i < json.length() && Character.isDigit(json.charAt(i))) num.append(json.charAt(i++));
+        try { return Integer.parseInt(num.toString()); } catch (NumberFormatException e) { return 0; }
+    }
+
+    /** Counts the number of result entries in a /batch-translate response that were served from cache. */
+    static int countFromCacheInBatchResponse(String json) {
+        int count = 0, idx = 0;
+        String marker = "\"from_cache\":true";
+        while ((idx = json.indexOf(marker, idx)) >= 0) { count++; idx += marker.length(); }
+        return count;
+    }
+
     static boolean extractBooleanField(String json, String fieldName) {
         String marker = "\"" + fieldName + "\":";
         int start = json.indexOf(marker);
@@ -736,16 +755,22 @@ public class LocalAiTranslateProvider extends BaseTranslate {
 
     static class GlossaryExtractionListener implements IEntryEventListener {
 
-        private final Set<String> processedThisSession = ConcurrentHashMap.newKeySet();
+        private final Set<String> processedThisSession   = ConcurrentHashMap.newKeySet();
+        private final Set<String> batchCheckedThisSession = ConcurrentHashMap.newKeySet();
 
         @Override
         public void onNewFile(String activeFileName) {
             if (activeFileName == null) return;
-            if (processedThisSession.contains(activeFileName)) return;
             if (!Core.getProject().isProjectLoaded()) return;
-            processedThisSession.add(activeFileName);
-            new Thread(() -> checkAndPrompt(activeFileName), "glossary-checker").start();
-            new Thread(() -> ensureFileSummary(activeFileName), "summary-generator").start();
+            if (!processedThisSession.contains(activeFileName)) {
+                processedThisSession.add(activeFileName);
+                new Thread(() -> checkAndPrompt(activeFileName), "glossary-checker").start();
+                new Thread(() -> ensureFileSummary(activeFileName), "summary-generator").start();
+            }
+            if (!batchCheckedThisSession.contains(activeFileName)) {
+                batchCheckedThisSession.add(activeFileName);
+                new Thread(() -> checkAndPromptBatch(activeFileName), "batch-pretranslate-checker").start();
+            }
         }
 
         @Override
@@ -996,6 +1021,71 @@ public class LocalAiTranslateProvider extends BaseTranslate {
                 }
             }
             return result;
+        }
+
+        // ── Batch pre-translation (OMP-027) ───────────────────────────────────
+
+        private void checkAndPromptBatch(String filePath) {
+            try {
+                if (!Core.getProject().isProjectLoaded()) return;
+                int untranslated = countUntranslatedEntries(filePath);
+                if (untranslated == 0) return;
+
+                String fileName = Paths.get(filePath).getFileName().toString();
+                String noun = untranslated == 1 ? " segment" : " segments";
+                SwingUtilities.invokeLater(() -> {
+                    int choice = JOptionPane.showConfirmDialog(
+                        null,
+                        "Pre-translate " + untranslated + " untranslated" + noun + " in \"" + fileName + "\"?\n"
+                        + "Results will be cached for instant retrieval when you reach each segment.",
+                        "Batch Pre-Translation",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.QUESTION_MESSAGE
+                    );
+                    if (choice == JOptionPane.YES_OPTION) {
+                        new Thread(() -> runBatchPreTranslate(filePath, fileName), "batch-pretranslate").start();
+                    }
+                });
+            } catch (Exception ignored) {}
+        }
+
+        private void runBatchPreTranslate(String filePath, String fileName) {
+            try {
+                if (!Core.getProject().isProjectLoaded()) return;
+                String srcLang = Core.getProject().getProjectProperties().getSourceLanguage().getLanguage();
+                String tgtLang = Core.getProject().getProjectProperties().getTargetLanguage().getLanguage();
+                String styleRules = loadProjectStyleRules();
+                String projectId  = currentProjectId();
+
+                String body = buildBatchRequestJson(filePath, srcLang, tgtLang, styleRules, projectId);
+                if (body == null) {
+                    Log.log(LOG_PREFIX + "batch pre-translate: no untranslated segments in " + filePath);
+                    return;
+                }
+
+                Log.log(LOG_PREFIX + "batch pre-translate: starting for " + filePath);
+                String response = httpPost(BATCH_TRANSLATE_URL, body, 300_000);
+
+                int completed  = extractIntField(response, "completed");
+                int failed     = extractIntField(response, "failed");
+                int fromCache  = countFromCacheInBatchResponse(response);
+                int newTx      = completed - fromCache;
+
+                Log.log(LOG_PREFIX + "batch pre-translate complete: "
+                    + completed + " done, " + failed + " failed, "
+                    + fromCache + " from cache, " + newTx + " new for " + filePath);
+
+                String msg = failed > 0
+                    ? completed + " segment" + (completed == 1 ? "" : "s")
+                      + " pre-translated (" + failed + " failed — see OmegaT log)."
+                    : completed + " segment" + (completed == 1 ? "" : "s")
+                      + " pre-translated (" + fromCache + " from cache, " + newTx + " new).";
+                SwingUtilities.invokeLater(() ->
+                    JOptionPane.showMessageDialog(null, msg,
+                        "Batch Pre-Translation: " + fileName, JOptionPane.INFORMATION_MESSAGE));
+            } catch (Exception e) {
+                Log.log(LOG_PREFIX + "batch pre-translate failed for " + filePath + ": " + e.getMessage());
+            }
         }
     }
 }
